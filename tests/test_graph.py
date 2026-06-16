@@ -64,3 +64,47 @@ class TestBacklinksGraph:
         graph.build_graph(notes)
         backlinks = graph.get_backlinks("A")
         assert "A" in backlinks
+
+
+class TestGraphExport:
+    def _notes(self):
+        return [
+            {"id": "a", "title": "Alpha", "links": ["Beta"], "tags": ["x"]},
+            {"id": "b", "title": "Beta", "links": ["Gamma"], "tags": []},
+            {"id": "c", "title": "Gamma", "links": [], "tags": []},
+        ]
+
+    def test_links_resolved_by_slug(self):
+        graph = BacklinksGraph()
+        graph.build_graph(self._notes())
+        # "Beta" in Alpha's links should resolve to node id "b".
+        assert "b" in graph.adj_list["a"]
+        assert graph.get_backlinks("b") == ["a"]
+
+    def test_get_graph_nodes_and_edges(self):
+        graph = BacklinksGraph()
+        graph.build_graph(self._notes())
+        payload = graph.get_graph()
+        assert {n["id"] for n in payload["nodes"]} == {"a", "b", "c"}
+        edges = {(e["source"], e["target"]) for e in payload["edges"]}
+        assert ("a", "b") in edges
+        assert ("b", "c") in edges
+
+    def test_node_degrees(self):
+        graph = BacklinksGraph()
+        graph.build_graph(self._notes())
+        nodes = {n["id"]: n for n in graph.get_graph()["nodes"]}
+        assert nodes["a"]["out_degree"] == 1
+        assert nodes["a"]["in_degree"] == 0
+        assert nodes["b"]["in_degree"] == 1
+
+    def test_get_outbound(self):
+        graph = BacklinksGraph()
+        graph.build_graph(self._notes())
+        assert graph.get_outbound("a") == ["b"]
+
+    def test_rebuild_clears_previous(self):
+        graph = BacklinksGraph()
+        graph.build_graph(self._notes())
+        graph.build_graph([{"id": "z", "title": "Z", "links": [], "tags": []}])
+        assert set(graph.adj_list) == {"z"}

@@ -2,37 +2,72 @@
 
 ## What This Is
 
-An Obsidian-compatible note parsing engine and backlinks graph builder. It reads local markdown directories, parses wikilinks, and compiles network adjacency configurations.
+A local-first knowledge base API. It ingests a markdown vault, parses
+Obsidian-style `[[wikilinks]]` into a bidirectional backlinks graph, supports
+keyword + semantic search, and answers questions over the notes with grounded
+citations. Offline-first: runs and tests with no database, no API key, and no
+network; upgrades to PostgreSQL + pgvector + real LLM/embeddings when configured.
 
 ## Layout Exception (CRITICAL)
 
 Unlike standard workspace repos, this project uses a monorepo layout:
-- **Source root**: `apps/api/src/` (NOT `src/`).
-- **Tests root**: `apps/api/tests/` or `tests/`.
-- **Config**: `pyproject.toml` is in the root directory, but references `apps/api/src`.
+- **Python package root**: `apps/api/src/` (NOT `src/`). Modules are imported via
+  the `apps.api.src` package (e.g. `from apps.api.src.engine import KnowledgeBase`),
+  and internally use relative imports (`from .chat import ...`). Tests and the demo
+  add the **project root** to `sys.path` so `apps.api.src` resolves as a package.
+- **Tests root**: `tests/`.
+- **Config**: `pyproject.toml` / `alembic.ini` live in the project root and point
+  back at `apps/api/src`.
+- **Web frontend**: `apps/web/` is a built, tested Next.js 14 dashboard (search,
+  note viewer, force-directed graph, cited chat, tags) with its own
+  `package.json`, Vitest component/page tests, and a Playwright smoke spec. It is
+  a separate toolchain from the Python gate — see `apps/web/README.md`.
 
 ## Commands
 
-Commands are run from the project root:
+Run from the project root:
 
 ```bash
-make install          # pip install -e ../shared-core && pip install -r apps/api/requirements.txt
-make dev              # python apps/api/src/main.py (FastAPI on :8000)
-make test             # pytest
-make lint             # ruff check .
-make format           # ruff format .
-make typecheck        # pyright apps/api/src/
-make docker-up        # docker compose up -d (Postgres + Redis)
-make demo             # python examples/run_demo.py
+make install      # pip install -e ../shared-core && pip install -r requirements.txt
+make dev          # python apps/api/src/main.py  (FastAPI on :8000)
+make test         # pytest
+make lint         # ruff check .
+make format       # ruff format .
+make typecheck    # pyright apps/api/src/
+make docker-up    # docker compose up -d  (Postgres + Redis)
+make demo         # python examples/run_demo.py
+alembic upgrade head   # apply DB migrations (only needed for persistence)
 ```
 
 ## Module Inventory
 
-- **`apps/api/src/main.py`**: API route definitions, health endpoints, and middleware.
-- **`apps/api/src/indexer.py`**: Reads directories, filters `.md` files, and extracts links matching `[[Link Name]]` regex patterns.
-- **`apps/api/src/graph.py`**: Compiles nodes, builds outgoing adjacency listings, and queries backlinks.
+- **`main.py`** — FastAPI app, endpoints, lifespan DB probe, middleware.
+- **`engine.py`** — `KnowledgeBase` orchestration shared by API + worker.
+- **`indexer.py`** — parse (docparse), chunk, extract wikilinks/tags/frontmatter.
+- **`embeddings.py`** — sync facade over `shared_core.embeddings` (offline/real).
+- **`search.py`** — keyword scorer + semantic vector retrieval.
+- **`chat.py`** — RAG answer (sim/real LLM) + `CitationJudge` grounding.
+- **`graph.py`** — backlinks adjacency + `{nodes, edges}` export.
+- **`store.py` / `models.py` / `db.py`** — persistence + DB-availability fallback.
+- **`worker.py`** — Celery tasks (`kb.index_vault`, `kb.reindex`).
+- **`config.py`** — `AppConfig` extending `shared_core.config.BaseAppConfig`.
 
-## Integrations & Secrets
+## shared_core Usage
 
-- **`shared-core`**: Core database/cache models. Must be installed as editable (`-e`).
-- **Input Traversal Concern**: The `path` parameter on `/notes/index` receives arbitrary directories. Check security boundaries before updating code.
+`config`, `database`, `redis`, `errors`, `health`, `logging`, `llm`, `embeddings`,
+`vectorstore`, `docparse`, `evaljudge` (`CitationJudge`), `tasks`, `testing`
+(`MockDatabase`). Must be installed editable (`-e ../shared-core`).
+
+## Conventions & Gotchas
+
+- **Offline-first**: never require keys/DB/network for tests or the demo. Use
+  `get_embedding_provider(offline=True)` / `get_vector_store(offline=True)` and the
+  simulated chat path by default.
+- **Determinism**: offline embeddings and the simulated chat answer are
+  deterministic; `tests/test_golden.py` pins them — update golden values
+  deliberately if a scorer/provider changes.
+- **`/health` is slow offline** (real socket connects); API tests patch
+  `db_manager` / `redis_manager` and use a plain `TestClient` (no lifespan) to stay
+  fast and in-memory.
+- **Input traversal**: `/notes/index` takes an arbitrary `path`. Sandbox hardening
+  is documented in `docs/security.md`; enforce it before untrusted exposure.

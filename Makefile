@@ -1,8 +1,11 @@
-.PHONY: install dev test lint format typecheck docker-up docker-down demo clean
+.PHONY: install dev test lint format typecheck docker-up docker-down demo migrate clean
 
 install:
-	pip install -e ../shared-core
+	pip install -e "../shared-core[dev,docparse]"
 	pip install -r requirements.txt
+
+migrate:
+	alembic upgrade head
 
 dev:
 	python apps/api/src/main.py

@@ -1,0 +1,13 @@
+Generic single-database configuration for personal-knowledge-base-os.
+
+The database URL is resolved at runtime from AppConfig.DATABASE_URL (env.py), so
+no connection string is hard-coded in alembic.ini.
+
+Common commands (run from the project root):
+
+    alembic upgrade head        # apply migrations
+    alembic revision --autogenerate -m "message"
+    alembic downgrade -1        # roll back one revision
+
+The service runs fully offline without migrations (in-memory note store fallback);
+migrations are only needed when persisting notes to PostgreSQL.

@@ -1,27 +1,39 @@
-# Project Roadmap - Personal Knowledge Base OS
-
-This document outlines the milestones and developmental timeline for the Personal Knowledge Base OS.
+# Roadmap — Personal Knowledge Base OS
 
 ---
 
-## Milestone 1: Local Ingestion & Graph Core (Completed)
-- **Monorepo API Directory**: Establish code boundaries under `apps/api/src/`.
-- **Obsidian wikilinks parser**: Support extraction of double-bracketed `[[Wikilink]]` connections.
-- **Backlink Solver**: Dynamic generation of bidirectional relationship graphs.
-- **Directory Ingestion**: System utilities to parse folder trees.
+## Milestone 1 — Local ingestion & graph core (done)
+- Monorepo API layout under `apps/api/src/`.
+- Obsidian `[[wikilink]]` parser and bidirectional backlinks graph.
+- Recursive directory ingestion and keyword search.
 
----
+## Milestone 2 — Retrieval, RAG, and persistence (done)
+- Real embeddings via `shared_core.embeddings` (offline hash fallback default,
+  OpenAI when keyed) — replaced the old `MockEmbeddingGenerator`.
+- Semantic + hybrid search over `shared_core.vectorstore` (in-memory offline,
+  pgvector when keyed), with chunk-to-note roll-up.
+- Markdown parsing + chunking via `shared_core.docparse`; YAML frontmatter, tag,
+  and metadata extraction.
+- Chat-with-citations: simulated/real LLM answer scored with
+  `shared_core.evaljudge.CitationJudge`.
+- Database persistence (`notes` / `note_chunks`) with graceful in-memory fallback
+  and Alembic migrations.
+- Celery worker tasks (`kb.index_vault`, `kb.reindex`) via
+  `shared_core.tasks.create_celery_app`.
+- Endpoints: index, keyword/semantic/hybrid search, chat, note + backlinks,
+  `{nodes, edges}` graph, tags, stats, health.
+- Comprehensive tests (unit, integration, API, worker, golden/regression) and a
+  richer demo vault.
 
-## Milestone 2: 3D Force-Directed Graph UI & YAML Metadata (Planned)
-- **Interactive Web Interface**: Initialize `apps/web/` using Next.js and TailwindCSS to render note networks as a responsive, force-directed graph.
-- **Node Markdown Editor**: Build a side-panel editor allowing users to select nodes, read note content, and modify files.
-- **Frontmatter Meta Parser**: Integrate parsing of YAML metadata blocks (tags, dates, categories) at the top of markdown notes.
-- **Dangling Link Highlighting**: Visual indicators on the graph identifying links to non-existent notes.
+## Milestone 3 — Graph UI & live editing (planned)
+- `apps/web/` (Next.js) force-directed graph visualization over `/graph`.
+- Node-side markdown editor that reads `/notes/{id}` and writes back to disk.
+- Dangling-link highlighting using a graph response that flags unresolved targets.
+- Live events / WebSocket stream so the dashboard updates as the vault changes.
 
----
-
-## Milestone 3: Semantic Vector RAG & Real-Time Sync (Future)
-- **Semantic Vector Similarity Ingestion**: Use `shared-core` pgvector bindings to store note embeddings. This lets users query similar notes based on topic similarity rather than explicit wiki linkages.
-- **Automated Directory Watcher**: Integrate filesystem event hooks (`watchdog` in Python) to trigger graph recompilations automatically when notes are updated, added, or deleted.
-- **Episodic Flashcard Generation**: Implement a space-repetition review builder (e.g. Leitner system card generator) leveraging LLMs to generate questions from notes.
-- **Multi-Vault Workspace Settings**: Allow switching between multiple isolated workspace note directories.
+## Milestone 4 — Sync, watching, and study tools (future)
+- Filesystem watcher (`watchdog`) to re-index on note add/edit/delete.
+- Incremental indexing (content-hash diffing) instead of full re-index.
+- Multi-vault workspaces with per-vault namespaces in the vector store.
+- LLM-generated spaced-repetition flashcards from notes.
+- Saved searches and tag-scoped semantic queries.

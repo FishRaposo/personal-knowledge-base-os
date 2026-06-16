@@ -1,7 +1,7 @@
 [project]
 name = "personal-knowledge-base-os"
-version = "0.1.0"
-description = "Local-first knowledge base with semantic search, wikilinks, and RAG chat"
+version = "1.0.0"
+description = "Local-first knowledge base with semantic search, wikilinks, backlinks graph, and RAG chat"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.100.0",
@@ -14,11 +14,27 @@ dependencies = [
     "redis>=5.0.0",
     "celery>=5.3.0",
     "pyyaml>=6.0.0",
+    "numpy>=1.24.0",
+    "alembic>=1.13.0",
+    "psycopg[binary]>=3.1.0",
+    "pgvector>=0.2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "ruff>=0.1.0",
-    "pyright>=1.1.0"
+    "pyright>=1.1.0",
 ]
+
+[tool.setuptools]
+# The Python package root is apps/api/src (loose modules), with the test suite
+# importing them via the ``apps.api.src`` namespace package.
+packages = ["apps.api.src"]
+
+[tool.setuptools.package-dir]
+"apps.api.src" = "apps/api/src"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

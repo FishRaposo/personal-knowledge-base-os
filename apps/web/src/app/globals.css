@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-300 bg-white px-4 py-2 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2;
+  }
+
+  .card {
+    @apply rounded-xl border border-ink-200 bg-white p-6 shadow-sm;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700;
+  }
+
+  .chip-muted {
+    @apply inline-flex items-center gap-1 rounded-full border border-ink-200 bg-ink-50 px-2.5 py-0.5 text-xs font-medium text-ink-600;
+  }
+}
+
+/* Markdown (react-markdown) rendering inside .prose-note */
+.prose-note h1 {
+  @apply mb-4 mt-2 text-2xl font-bold text-ink-900;
+}
+.prose-note h2 {
+  @apply mb-3 mt-6 text-lg font-semibold text-ink-800;
+}
+.prose-note h3 {
+  @apply mb-2 mt-5 text-base font-semibold text-ink-800;
+}
+.prose-note p {
+  @apply mb-4 leading-relaxed text-ink-700;
+}
+.prose-note ul {
+  @apply mb-4 list-disc space-y-1 pl-6 text-ink-700;
+}
+.prose-note ol {
+  @apply mb-4 list-decimal space-y-1 pl-6 text-ink-700;
+}
+.prose-note li {
+  @apply leading-relaxed;
+}
+.prose-note a {
+  @apply font-medium text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700;
+}
+.prose-note code {
+  @apply rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[0.85em] text-brand-700;
+}
+.prose-note pre {
+  @apply mb-4 overflow-x-auto rounded-lg bg-ink-900 p-4 text-sm text-ink-100;
+}
+.prose-note pre code {
+  @apply bg-transparent p-0 text-ink-100;
+}
+.prose-note blockquote {
+  @apply mb-4 border-l-4 border-brand-200 pl-4 italic text-ink-600;
+}
+.prose-note strong {
+  @apply font-semibold text-ink-900;
+}
+.prose-note em {
+  @apply italic;
+}
+.prose-note hr {
+  @apply my-6 border-ink-200;
+}

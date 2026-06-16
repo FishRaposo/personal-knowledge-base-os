@@ -31,6 +31,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # Next.js dashboard. Runs standalone in demo mode (bundled sample data) even
+  # with no API; point NEXT_PUBLIC_API_URL at the FastAPI backend to go live.
+  web:
+    build:
+      context: ./apps/web
+      target: dev
+    container_name: kb_web
+    ports:
+      - "3000:3000"
+    environment:
+      # Reach a backend running on the host from inside the container.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://host.docker.internal:8000}
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   pgdata:
   redisdata:

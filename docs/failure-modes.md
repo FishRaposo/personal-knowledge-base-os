@@ -1,49 +1,97 @@
-# Failure Modes & Mitigation - Personal Knowledge Base OS
+# Failure Modes & Mitigations — Personal Knowledge Base OS
 
-This document details anticipated failure modes, detection strategies, and mitigation pathways for the Personal Knowledge Base OS.
-
----
-
-## 1. Directory Traversal / Arbitrary Path Reads
-
-- **Cause**: The API `/notes/index?path=...` accepts a query string specifying a folder. If unvalidated, a client can input root system directories (e.g., `C:\` or `/etc`) to read system files.
-- **Impact**: Exposure of sensitive host configuration files, environment variables, or private directories.
-- **Detection**:
-  - API receives request paths containing parent traversal sequences or system folders.
-  - Logs show unauthorized directory access attempts.
-- **Mitigation**: Resolve target path to an absolute path and verify it lies within a designated root user sandbox directory (e.g., a designated `vaults/` directory). Reject any path parameters containing double dots `..`.
-- **Future Fix**: Enforce sandbox boundaries at the operating system or container layer, restricting file access permissions of the FastAPI process.
+Anticipated failure modes, how they are detected, and how the service handles
+them today (vs. future hardening).
 
 ---
 
-## 2. Text Encoding & Binary File Crashes
+## 1. Database unavailable
 
-- **Cause**: A markdown directory contains non-UTF-8 files (e.g., encoded in UTF-16, ISO-8859-1) or binary attachments (like `.png` or `.pdf` files renamed or placed in the folder).
-- **Impact**: The indexer throws `UnicodeDecodeError` when executing `f.read()`, crashing the ingestion routine and returning HTTP 500.
-- **Detection**:
-  - Ingestion halts with `UnicodeDecodeError` in trace logs.
-  - API responses return 500 status codes on specific folders.
-- **Mitigation**: The indexer file-open call utilizes `errors="ignore"` or `errors="replace"` parameter on `open()` to prevent decoding exceptions from halting execution.
-- **Future Fix**: Add mime-type checkers that filter out non-text files and implement encoding detection (using libraries like `chardet`) before reading file bytes.
-
----
-
-## 3. Worker Starvation via Large Directory Ingestion
-
-- **Cause**: A user requests indexing on a massive directory containing tens of thousands of files (e.g., the user's home folder or `node_modules`).
-- **Impact**: The single-threaded synchronous file read operation blocks the FastAPI worker thread, causing the server to hang and leading to gateway timeouts on all other API requests.
-- **Detection**:
-  - Response latency spikes.
-  - Uvicorn server logs timeouts.
-- **Mitigation**: Filter folder listing to include only files ending with `.md`, avoiding parsing non-markdown files.
-- **Future Fix**: Implement asynchronous file reads utilizing `aiofiles` or offload directory parsing to Celery background workers (`worker.py`), returning an execution job ID immediately.
+- **Cause**: No PostgreSQL is running (the default offline case), or it goes down
+  mid-operation.
+- **Impact (mitigated)**: None to availability. `db.py` does a fast ~0.25s TCP
+  pre-check plus `SELECT 1`; on failure the service uses `InMemoryNoteStore` and an
+  in-memory vector store. The API, worker, demo, and tests all run with no DB.
+- **Detection**: A logged "Database unreachable — using in-memory note store"
+  line; `/health` reports `database: offline`.
+- **Cost**: Notes are not persisted across restarts in the offline path. This is
+  by design for the local-first default.
 
 ---
 
-## 4. Broken/Dangling Wikilinks
+## 2. No API key (embeddings / LLM)
 
-- **Cause**: Notes contain wikilinks to notes that do not exist (e.g., `[[Missing Note]]`).
-- **Impact**: The backlinks graph registers outgoing edges to nodes that have no matching content or source files.
-- **Detection**: Adjacency lists contain target nodes that are missing from the primary notes index list.
-- **Mitigation**: The graph builder creates blank nodes for missing link targets in the adjacency list, preventing key errors when querying backlinks.
-- **Future Fix**: Flag dangling links in the API response so frontend applications can render them as dashed or colored red nodes to alert users of broken links.
+- **Cause**: `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are unset.
+- **Impact (mitigated)**: None. Embeddings fall back to the deterministic hash
+  provider; chat composes a simulated, citation-bearing answer. Both are
+  reproducible.
+- **Detection**: Chat responses report `mode: simulated` and `model: simulated`.
+- **Future**: Surface a capability flag in `/stats` so a dashboard can show
+  whether real providers are active.
+
+---
+
+## 3. LLM call fails or SDK missing (keyed path)
+
+- **Cause**: A key is configured but the `openai`/`anthropic` SDK is not installed,
+  or the API call errors/times out.
+- **Impact (mitigated)**: The request never crashes. `chat.py` catches
+  `ImportError` and generic exceptions, logs them, and falls back to the simulated
+  answer — mirroring the `llm-cost-latency-monitor` SDK pattern.
+- **Detection**: A warning/error log line; the response still returns `grounded`
+  with a simulated answer.
+
+---
+
+## 4. Directory traversal / arbitrary path reads
+
+- **Cause**: `/notes/index` accepts a `path`. An attacker could point it at system
+  directories.
+- **Impact**: Potential read of files outside an intended vault root.
+- **Current**: The indexer only opens `.md`/`.markdown` files and tolerates decode
+  errors, limiting blast radius; an empty/missing path yields a 400.
+- **Future fix**: Resolve to an absolute path and enforce an allow-listed vault
+  root, rejecting `..` sequences. See `security.md`.
+
+---
+
+## 5. Non-UTF-8 or binary files in the vault
+
+- **Cause**: UTF-16/Latin-1 files or binaries (`.png` renamed to `.md`).
+- **Impact (mitigated)**: No crash. The markdown parser decodes with
+  `errors="replace"`, so a bad file degrades to replacement characters rather than
+  raising `UnicodeDecodeError`.
+- **Future fix**: MIME sniffing + a max-file-size guard to skip binaries entirely.
+
+---
+
+## 6. Large vault blocks the request thread
+
+- **Cause**: Indexing a very large directory synchronously in the request handler.
+- **Impact**: Latency spikes / timeouts on concurrent requests.
+- **Current**: Only `.md`/`.markdown` files are read; the Celery worker
+  (`kb.index_vault`) exists to offload indexing off the request path.
+- **Future fix**: Make `/notes/index` dispatch to the worker and return a job id;
+  add async file reads.
+
+---
+
+## 7. Broken / dangling wikilinks
+
+- **Cause**: `[[Missing Note]]` points at a note that does not exist.
+- **Impact (mitigated)**: No key errors. The graph records the edge to the
+  (unresolved) target; `get_backlinks` still works, and the target simply has no
+  node payload.
+- **Future fix**: Flag dangling targets in the `/graph` response so a UI can render
+  them distinctly.
+
+---
+
+## 8. Embedding / scorer drift
+
+- **Cause**: A future change swaps the embedding provider or citation scorer and
+  silently changes rankings or grounding.
+- **Impact**: Search results or chat grounding regress without an obvious failure.
+- **Mitigation**: Golden tests (`tests/test_golden.py`) pin the offline embedding
+  prefix, the `CitationJudge` scores, and the deterministic semantic ranking over
+  the demo vault, so drift breaks the build.
