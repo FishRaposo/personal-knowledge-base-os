@@ -1,8 +1,7 @@
 """Keyword and semantic search tests."""
 
-from shared_core.vectorstore import InMemoryVectorStore
-
 from apps.api.src.embeddings import EmbeddingGenerator
+from apps.api.src.internal.vendor_core.vectorstore import InMemoryVectorStore
 from apps.api.src.search import (
     build_vector_store,
     keyword_search,

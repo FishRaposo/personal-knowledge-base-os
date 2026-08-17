@@ -12,20 +12,27 @@ from typing import Optional
 from urllib.parse import urlsplit
 
 from loguru import logger
-from shared_core.database import DatabaseManager
 from sqlalchemy import text
 
 from .config import AppConfig
+from .internal.vendor_core.database import DatabaseManager
 from .store import DatabaseNoteStore, InMemoryNoteStore, NoteStore
 
 config = AppConfig()
 
-db_manager = DatabaseManager(
-    config.DATABASE_URL,
-    pool_size=config.DB_POOL_SIZE,
-    max_overflow=config.DB_MAX_OVERFLOW,
-    pool_timeout=config.DB_POOL_TIMEOUT,
-)
+_database_driver_available = True
+try:
+    db_manager = DatabaseManager(
+        config.DATABASE_URL,
+        pool_size=config.DB_POOL_SIZE,
+        max_overflow=config.DB_MAX_OVERFLOW,
+        pool_timeout=config.DB_POOL_TIMEOUT,
+    )
+except ImportError:
+    # PostgreSQL is an opt-in integration. A lightweight SQLite engine keeps the
+    # module importable while ``check_db`` selects the normal in-memory store.
+    _database_driver_available = False
+    db_manager = DatabaseManager("sqlite:///:memory:")
 
 db_available: bool = False
 
@@ -60,6 +67,12 @@ def _db_reachable(url: str) -> bool:
 def check_db() -> bool:
     """Probe database connectivity and cache the result in ``db_available``."""
     global db_available
+    if not _database_driver_available:
+        db_available = False
+        logger.info(
+            "PostgreSQL driver not installed — using in-memory note store (offline)."
+        )
+        return db_available
     if not _db_reachable(config.DATABASE_URL):
         db_available = False
         logger.info("Database host unreachable — using in-memory note store (offline).")

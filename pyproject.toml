@@ -1,39 +1,39 @@
 [project]
 name = "personal-knowledge-base-os"
 version = "1.0.0"
-description = "Local-first knowledge base with semantic search, wikilinks, backlinks graph, and RAG chat"
+description = "Local knowledge-base API with backlinks and citation-grounded chat."
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.22.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    "httpx>=0.24.0",
     "loguru>=0.7.0",
     "sqlalchemy>=2.0.0",
-    "redis>=5.0.0",
-    "celery>=5.3.0",
-    "pyyaml>=6.0.0",
-    "numpy>=1.24.0",
-    "alembic>=1.13.0",
-    "psycopg[binary]>=3.1.0",
-    "pgvector>=0.2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.24.0",
     "ruff>=0.1.0",
     "pyright>=1.1.0",
+    "build>=1.2.0",
+    "alembic>=1.13.0",
 ]
+postgres = ["psycopg[binary]>=3.1.0", "pgvector>=0.2.0"]
+redis = ["redis>=5.0.0"]
+worker = ["celery>=5.3.0", "redis>=5.0.0"]
+providers = ["httpx>=0.24.0", "openai>=1.0.0", "anthropic>=0.30.0"]
+parsers = ["pypdf>=4.0.0", "python-docx>=1.1.0", "beautifulsoup4>=4.12.0"]
+embeddings = ["numpy>=1.24.0", "sentence-transformers>=3.0.0"]
+watcher = ["watchdog>=4.0.0"]
 
-[tool.setuptools]
-# The Python package root is apps/api/src (loose modules), with the test suite
-# importing them via the ``apps.api.src`` namespace package.
-packages = ["apps.api.src"]
-
-[tool.setuptools.package-dir]
-"apps.api.src" = "apps/api/src"
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["apps.api.src*"]
+namespaces = true
 
 [build-system]
 requires = ["setuptools>=61.0"]

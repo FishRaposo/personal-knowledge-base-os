@@ -28,8 +28,8 @@ Unlike standard workspace repos, this project uses a monorepo layout:
 Run from the project root:
 
 ```bash
-make install      # pip install -e ../shared-core && pip install -r requirements.txt
-make dev          # python apps/api/src/main.py  (FastAPI on :8000)
+make install      # python -m pip install -e ".[dev]"
+make dev          # python -m apps.api.src.main  (FastAPI on :8000)
 make test         # pytest
 make lint         # ruff check .
 make format       # ruff format .
@@ -44,19 +44,20 @@ alembic upgrade head   # apply DB migrations (only needed for persistence)
 - **`main.py`** — FastAPI app, endpoints, lifespan DB probe, middleware.
 - **`engine.py`** — `KnowledgeBase` orchestration shared by API + worker.
 - **`indexer.py`** — parse (docparse), chunk, extract wikilinks/tags/frontmatter.
-- **`embeddings.py`** — sync facade over `shared_core.embeddings` (offline/real).
+- **`embeddings.py`** — sync facade over internal vendored embeddings (offline/real).
 - **`search.py`** — keyword scorer + semantic vector retrieval.
 - **`chat.py`** — RAG answer (sim/real LLM) + `CitationJudge` grounding.
 - **`graph.py`** — backlinks adjacency + `{nodes, edges}` export.
 - **`store.py` / `models.py` / `db.py`** — persistence + DB-availability fallback.
 - **`worker.py`** — Celery tasks (`kb.index_vault`, `kb.reindex`).
-- **`config.py`** — `AppConfig` extending `shared_core.config.BaseAppConfig`.
+- **`config.py`** — `AppConfig` extending internal `vendor_core.config.BaseAppConfig`.
 
-## shared_core Usage
+## Internal compatibility layer
 
+`apps/api/src/internal/vendor_core/` contains the pinned v1.3.0 closure for
 `config`, `database`, `redis`, `errors`, `health`, `logging`, `llm`, `embeddings`,
-`vectorstore`, `docparse`, `evaljudge` (`CitationJudge`), `tasks`, `testing`
-(`MockDatabase`). Must be installed editable (`-e ../shared-core`).
+`vectorstore`, `docparse`, `evaljudge` (`CitationJudge`), `tasks`, `testing`, and
+transitive pricing. The repository installs without a sibling package.
 
 ## Conventions & Gotchas
 

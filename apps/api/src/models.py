@@ -8,8 +8,9 @@ pgvector when a database is configured), so this relational store does not need 
 native vector column to function.
 """
 
-from shared_core.database import Base, TimestampMixin, UUIDMixin
 from sqlalchemy import JSON, Column, ForeignKey, Integer, String, Text
+
+from .internal.vendor_core.database import Base, TimestampMixin, UUIDMixin
 
 
 class Note(Base, UUIDMixin, TimestampMixin):

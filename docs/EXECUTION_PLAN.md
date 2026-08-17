@@ -20,20 +20,20 @@ no embeddings beyond the mock, and the API exposed only index/search/chat/backli
 
 ### Retrieval & AI logic (stubs → real)
 - **Embeddings**: Replaced `MockEmbeddingGenerator` with `EmbeddingGenerator`, a
-  sync facade over `shared_core.embeddings` — offline `HashFallbackProvider` by
+  sync facade over internal `vendor_core.embeddings` — offline `HashFallbackProvider` by
   default, OpenAI when `OPENAI_API_KEY` is set. No torch / sentence-transformers.
 - **Semantic search**: Implemented real vector retrieval over
-  `shared_core.vectorstore` (`InMemoryVectorStore` offline, `PgVectorStore` when a
+  internal `vendor_core.vectorstore` (`InMemoryVectorStore` offline, `PgVectorStore` when a
   DB is configured). Chunk hits roll up to parent notes with the best snippet.
   Added a `hybrid` mode merging keyword + semantic.
-- **Ingestion**: Rebuilt the indexer on `shared_core.docparse` (`MarkdownParser` +
+- **Ingestion**: Rebuilt the indexer on internal `vendor_core.docparse` (`MarkdownParser` +
   `chunk_text`). Added YAML frontmatter parsing, `#hashtag` + frontmatter tag
   extraction, content hashing, recursive traversal, and per-note chunking — while
   keeping wikilink extraction (now alias- and slug-aware).
 - **Chat with citations**: Real RAG — retrieve chunks, build a grounded prompt,
   answer with a deterministic simulation offline or a real LLM via
-  `shared_core.llm.LLMClientFactory` when keyed (with graceful fallback). Citation
-  grounding is *scored* with `shared_core.evaljudge.CitationJudge`.
+  internal `vendor_core.llm.LLMClientFactory` when keyed (with graceful fallback). Citation
+  grounding is *scored* with internal `vendor_core.evaljudge.CitationJudge`.
 
 ### Persistence (new)
 - `models.py` (`Note`, `NoteChunk`), `store.py` (`InMemoryNoteStore` +
@@ -50,7 +50,7 @@ no embeddings beyond the mock, and the API exposed only index/search/chat/backli
   `GET /notes/{id}/backlinks`, `GET /graph` (nodes+edges), `GET /tags`,
   `GET /stats`, `GET /health`.
 - `worker.py` — real tasks (`kb.index_vault`, `kb.reindex`) via
-  `shared_core.tasks.create_celery_app`, importable with no broker.
+  internal `vendor_core.tasks.create_celery_app`, importable with no broker.
 
 ### Tests & data
 - Test suite expanded from 16 → 100: embeddings, keyword + semantic search, graph

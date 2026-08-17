@@ -8,18 +8,18 @@
 - Recursive directory ingestion and keyword search.
 
 ## Milestone 2 — Retrieval, RAG, and persistence (done)
-- Real embeddings via `shared_core.embeddings` (offline hash fallback default,
+- Real embeddings via internal `vendor_core.embeddings` (offline hash fallback default,
   OpenAI when keyed) — replaced the old `MockEmbeddingGenerator`.
-- Semantic + hybrid search over `shared_core.vectorstore` (in-memory offline,
+- Semantic + hybrid search over internal `vendor_core.vectorstore` (in-memory offline,
   pgvector when keyed), with chunk-to-note roll-up.
-- Markdown parsing + chunking via `shared_core.docparse`; YAML frontmatter, tag,
+- Markdown parsing + chunking via internal `vendor_core.docparse`; YAML frontmatter, tag,
   and metadata extraction.
 - Chat-with-citations: simulated/real LLM answer scored with
-  `shared_core.evaljudge.CitationJudge`.
+  internal `vendor_core.evaljudge.CitationJudge`.
 - Database persistence (`notes` / `note_chunks`) with graceful in-memory fallback
   and Alembic migrations.
 - Celery worker tasks (`kb.index_vault`, `kb.reindex`) via
-  `shared_core.tasks.create_celery_app`.
+  internal `vendor_core.tasks.create_celery_app`.
 - Endpoints: index, keyword/semantic/hybrid search, chat, note + backlinks,
   `{nodes, edges}` graph, tags, stats, health.
 - Comprehensive tests (unit, integration, API, worker, golden/regression) and a

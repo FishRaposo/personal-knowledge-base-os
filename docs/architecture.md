@@ -14,14 +14,14 @@ real LLM/embedding providers when those are configured.
 
 The pipeline has five layers:
 
-1. **Ingestion (`indexer.py`)** — parses markdown via `shared_core.docparse`,
+1. **Ingestion (`indexer.py`)** — parses markdown via internal `vendor_core.docparse`,
    strips YAML frontmatter, extracts `[[wikilinks]]`, `#hashtags`, and metadata,
    and chunks each note for embedding.
-2. **Embedding (`embeddings.py`)** — wraps `shared_core.embeddings`: a
+2. **Embedding (`embeddings.py`)** — wraps internal `vendor_core.embeddings`: a
    deterministic offline hash fallback by default, the real OpenAI endpoint when
    `OPENAI_API_KEY` is set.
 3. **Retrieval (`search.py`)** — keyword scoring + semantic vector search over
-   `shared_core.vectorstore` (in-memory offline, pgvector when keyed).
+   internal `vendor_core.vectorstore` (in-memory offline, pgvector when keyed).
 4. **Graph (`graph.py`)** — bidirectional backlinks adjacency + a `{nodes, edges}`
    export for a visualization UI.
 5. **Orchestration + API (`engine.py`, `main.py`)** — the `KnowledgeBase` engine
@@ -45,11 +45,11 @@ graph TD
     Engine --> Graph["BacklinksGraph<br/>graph.py"]
     Engine --> Chat["chat_with_citations<br/>chat.py"]
 
-    Indexer -->|"docparse parse + chunk"| SC1["shared_core.docparse"]
-    Embedder -->|"hash fallback / OpenAI"| SC2["shared_core.embeddings"]
-    Search -->|"cosine query"| VS["shared_core.vectorstore<br/>(InMemory | PgVector)"]
-    Chat -->|"sim / real LLM"| SC3["shared_core.llm"]
-    Chat -->|"citation grounding"| SC4["shared_core.evaljudge<br/>CitationJudge"]
+    Indexer -->|"docparse parse + chunk"| SC1["internal vendor_core.docparse"]
+    Embedder -->|"hash fallback / OpenAI"| SC2["internal vendor_core.embeddings"]
+    Search -->|"cosine query"| VS["internal vendor_core.vectorstore<br/>(InMemory | PgVector)"]
+    Chat -->|"sim / real LLM"| SC3["internal vendor_core.llm"]
+    Chat -->|"citation grounding"| SC4["internal vendor_core.evaljudge<br/>CitationJudge"]
 
     Engine --> Store["NoteStore<br/>store.py"]
     Store -->|"DB probe"| DB["db.py<br/>db_available?"]
@@ -130,7 +130,7 @@ Two layers serve different needs:
   tables hold the canonical note content, links, tags, metadata, and chunk
   embeddings (embeddings as JSON so the schema is SQLite-compatible for the
   offline test fallback). Managed by Alembic (`alembic/`).
-- **Vector store (`shared_core.vectorstore`)** — the search index. In-memory and
+- **Vector store (internal `vendor_core.vectorstore`)** — the search index. In-memory and
   recomputable offline; pgvector (`note_vectors` table, `notes` namespace) when a
   database is configured.
 
@@ -148,7 +148,7 @@ engine rebuilds the graph + vectors from the store on startup via
 | `main.py` | FastAPI app, endpoints, lifespan DB probe, middleware |
 | `engine.py` | `KnowledgeBase` orchestration (index / search / chat / graph) |
 | `indexer.py` | Parse, chunk, extract wikilinks / tags / frontmatter |
-| `embeddings.py` | Sync facade over `shared_core.embeddings` (offline/real) |
+| `embeddings.py` | Sync facade over internal `vendor_core.embeddings` (offline/real) |
 | `search.py` | Keyword scorer + semantic vector retrieval |
 | `chat.py` | RAG answer (sim/real LLM) + `CitationJudge` grounding |
 | `graph.py` | Backlinks adjacency + `{nodes, edges}` export |
@@ -156,4 +156,4 @@ engine rebuilds the graph + vectors from the store on startup via
 | `db.py` | DB-availability probe + store selection |
 | `models.py` | SQLAlchemy `Note` / `NoteChunk` |
 | `worker.py` | Celery tasks (`kb.index_vault`, `kb.reindex`) |
-| `config.py` | `AppConfig` (extends `shared_core` `BaseAppConfig`) |
+| `config.py` | `AppConfig` (extends internal `vendor_core` `BaseAppConfig`) |

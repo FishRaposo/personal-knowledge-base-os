@@ -13,8 +13,8 @@ The reasoning behind the major technical choices in this service.
   database, and no network. Deterministic defaults also make the test suite
   reproducible — the offline hash embeddings and simulated chat answer return the
   same output every run.
-- **How**: `shared_core.embeddings.get_embedding_provider(offline=True)` (hash
-  fallback), `shared_core.vectorstore.get_vector_store(offline=True)` (in-memory),
+- **How**: internal `vendor_core.embeddings.get_embedding_provider(offline=True)` (hash
+  fallback), internal `vendor_core.vectorstore.get_vector_store(offline=True)` (in-memory),
   a simulated chat answer mirroring `llm-cost-latency-monitor`'s SDK, and a DB
   probe with in-memory fallback.
 
@@ -35,11 +35,11 @@ The reasoning behind the major technical choices in this service.
 
 ---
 
-## 3. Reuse `shared_core` instead of bespoke logic
+## 3. Vendor the proven compatibility closure instead of restoring a sibling
 
-- **Decision**: Use `shared_core.docparse` for parsing/chunking,
-  `shared_core.embeddings` for vectors, `shared_core.vectorstore` for retrieval,
-  and `shared_core.evaljudge.CitationJudge` for grounding — rather than
+- **Decision**: Use internal `vendor_core.docparse` for parsing/chunking,
+  `vendor_core.embeddings` for vectors, `vendor_core.vectorstore` for retrieval,
+  and `vendor_core.evaljudge.CitationJudge` for grounding — rather than
   hand-rolling each.
 - **Rationale**: These are the convergence points across the portfolio; reusing
   them keeps behavior consistent and battle-tested. The previous

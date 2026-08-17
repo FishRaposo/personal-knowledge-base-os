@@ -51,6 +51,8 @@ class BacklinksGraph:
         for note in notes:
             key = _key(note)
             for link in note.get("links", []):
+                if not isinstance(link, str):
+                    continue
                 target = alias_to_key.get(_slug(link), link)
                 self.adj_list[key].add(target)
 

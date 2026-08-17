@@ -13,7 +13,8 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from shared_core.evaljudge import CitationJudge
+
+from .internal.vendor_core.evaljudge import CitationJudge
 
 _REFUSAL = "I don't have any notes that address that question."
 
@@ -55,7 +56,7 @@ def _simulated_answer(query: str, citations: List[Dict]) -> str:
 
 def _call_llm(prompt: str, *, model: str, api_keys: Dict[str, Optional[str]]) -> str:
     """Invoke the real LLM via shared_core. Raises on missing SDK / key."""
-    from shared_core.llm import LLMClientFactory
+    from .internal.vendor_core.llm import LLMClientFactory
 
     factory = LLMClientFactory(
         openai_api_key=api_keys.get("openai"),

@@ -20,12 +20,12 @@ The repository is structured as a standalone project conforming to operator work
 * **`apps/api/src/main.py`**: FastAPI server exposing endpoints to Next.js notes interfaces.
 
 ### 2.2 Shared Core Dependencies
-This service imports standard layers from `shared-core` (sibling dependency library):
-* `shared_core.config.BaseAppConfig`: Settings parsing, reading configs from `.env`.
-* `shared_core.database.DatabaseManager`: SQL database engine instantiation and session factories.
-* `shared_core.redis.RedisManager`: Caching connections and health checks.
-* `shared_core.logging.setup_logging`: Structured log formats and correlation ID tracing.
-* `shared_core.errors.BaseApplicationError`: Exception mapping and global handlers.
+This service owns a pinned compatibility closure under `apps/api/src/internal/vendor_core/`:
+* `vendor_core.config.BaseAppConfig`: Settings parsing, reading configs from `.env`.
+* `vendor_core.database.DatabaseManager`: SQL database engine instantiation and session factories.
+* `vendor_core.redis.RedisManager`: Optional caching connections and health checks.
+* `vendor_core.logging.setup_logging`: Structured log formats and correlation ID tracing.
+* `vendor_core.errors.BaseApplicationError`: Exception mapping and global handlers.
 
 ---
 

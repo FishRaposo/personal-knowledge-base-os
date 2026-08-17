@@ -1,4 +1,4 @@
-from shared_core.config import BaseAppConfig
+from .internal.vendor_core.config import BaseAppConfig
 
 
 class AppConfig(BaseAppConfig):

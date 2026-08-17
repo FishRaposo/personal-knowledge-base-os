@@ -6,9 +6,7 @@
 ![Redis](https://img.shields.io/badge/Redis-7-dc382d?logo=redis&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-100%20passing-2ea44f)
 
-> A local-first knowledge base API: point it at a folder of markdown notes and get
-> keyword + semantic search, an Obsidian-style backlinks graph, and chat over your
-> notes with grounded citations — running fully offline, with no API keys.
+> Local knowledge-base API with backlinks and citation-grounded chat.
 
 ---
 
@@ -26,23 +24,23 @@ configured — so it runs, tests, and demos with nothing but Python.
 
 ## What it demonstrates
 
-- **Markdown vault ingestion** — parse + chunk via `shared_core.docparse`, plus
+- **Markdown vault ingestion** — parse + chunk via the internal `vendor_core.docparse`, plus
   `[[wikilink]]`, `#hashtag`, and YAML-frontmatter extraction (`indexer.py`).
-- **Semantic search** — real vector retrieval over `shared_core.vectorstore`
+- **Semantic search** — real vector retrieval over internal `vendor_core.vectorstore`
   (in-memory offline, pgvector when a DB is configured), with chunk-to-note
   roll-up; keyword and hybrid modes too (`search.py`).
-- **Offline + real embeddings** — `shared_core.embeddings`: a deterministic hash
+- **Offline + real embeddings** — internal `vendor_core.embeddings`: a deterministic hash
   fallback by default, OpenAI `text-embedding-3-small` when keyed. No torch /
   sentence-transformers (`embeddings.py`).
 - **Bidirectional backlinks graph** — outbound adjacency, reverse backlinks, and a
   `{nodes, edges}` export sized for a force-directed UI (`graph.py`).
 - **Chat with citations (RAG)** — retrieve chunks, answer with a simulated or real
   LLM, and **score** the citation grounding with
-  `shared_core.evaljudge.CitationJudge` (`chat.py`).
+  internal `vendor_core.evaljudge.CitationJudge` (`chat.py`).
 - **Persistence with graceful fallback** — notes/chunks persist to PostgreSQL by
   default, with a fast DB probe that falls back to in-memory so tests/demos need no
   database (`db.py`, `store.py`, `models.py`, `alembic/`).
-- **Real worker** — Celery tasks via `shared_core.tasks.create_celery_app`,
+- **Real worker** — Celery tasks via internal `vendor_core.tasks.create_celery_app`,
   importable with no broker (`worker.py`).
 
 ## Architecture
@@ -58,10 +56,10 @@ graph TD
     Engine --> Graph["BacklinksGraph<br/>graph.py"]
     Engine --> Chat["chat_with_citations<br/>chat.py"]
 
-    Indexer -->|parse + chunk| SC1["shared_core.docparse"]
-    Embedder -->|hash / OpenAI| SC2["shared_core.embeddings"]
-    Search -->|cosine query| VS["shared_core.vectorstore<br/>(InMemory | PgVector)"]
-    Chat -->|sim / real LLM| SC3["shared_core.llm"]
+    Indexer -->|parse + chunk| SC1["internal vendor_core.docparse"]
+    Embedder -->|hash / OpenAI| SC2["internal vendor_core.embeddings"]
+    Search -->|cosine query| VS["internal vendor_core.vectorstore<br/>(InMemory | PgVector)"]
+    Chat -->|sim / real LLM| SC3["internal vendor_core.llm"]
     Chat -->|grounding| SC4["evaljudge.CitationJudge"]
 
     Engine --> Store["NoteStore<br/>store.py"]
@@ -81,15 +79,15 @@ persistence sequence diagrams.
 | Component | Technology | Why |
 |-----------|-----------|-----|
 | API | FastAPI + Pydantic v2 | Async, typed, auto OpenAPI |
-| Embeddings | `shared_core.embeddings` | Offline hash fallback / OpenAI when keyed |
-| Vector search | `shared_core.vectorstore` | In-memory offline / pgvector in prod |
-| Parsing | `shared_core.docparse` | Shared markdown parse + chunking |
-| RAG grounding | `shared_core.evaljudge` | `CitationJudge` scores citations |
-| LLM | `shared_core.llm` | OpenAI / Anthropic, mock for tests |
+| Embeddings | internal `vendor_core.embeddings` | Offline hash fallback / OpenAI when keyed |
+| Vector search | internal `vendor_core.vectorstore` | In-memory offline / pgvector in prod |
+| Parsing | internal `vendor_core.docparse` | Vendored markdown parse + chunking |
+| RAG grounding | internal `vendor_core.evaljudge` | `CitationJudge` scores citations |
+| LLM | internal `vendor_core.llm` | OpenAI / Anthropic, mock for tests |
 | Persistence | SQLAlchemy + Alembic | `notes` / `note_chunks`, JSON embeddings |
-| Worker | Celery via `shared_core.tasks` | Off-request indexing |
+| Worker | Celery via internal `vendor_core.tasks` | Off-request indexing |
 | Database / Cache | PostgreSQL 16 / Redis 7 | Persistence + health |
-| Shared library | [shared-core](../shared-core/) | Config, DB, errors, logging, AI infra |
+| Compatibility layer | `apps/api/src/internal/vendor_core/` | Self-contained config, DB, errors, logging, AI infra |
 
 ## Monorepo layout
 
@@ -99,7 +97,7 @@ personal-knowledge-base-os/
 │   ├── main.py              # FastAPI app + endpoints + lifespan DB probe
 │   ├── engine.py            # KnowledgeBase orchestration
 │   ├── indexer.py           # parse, chunk, wikilinks/tags/frontmatter
-│   ├── embeddings.py        # shared_core embeddings facade
+│   ├── embeddings.py        # internal vendored embeddings facade
 │   ├── search.py            # keyword + semantic + hybrid search
 │   ├── chat.py              # RAG chat + CitationJudge grounding
 │   ├── graph.py             # backlinks graph + nodes/edges export
@@ -117,10 +115,9 @@ personal-knowledge-base-os/
 ## Setup
 
 ```bash
-# Create a venv and install shared-core + this project (offline-capable)
+# Create a venv and install this self-contained project (offline-capable)
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
-pip install -e "../shared-core[dev,docparse]" numpy
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 
 # (optional) real persistence — start Postgres + Redis, then migrate
 make docker-up

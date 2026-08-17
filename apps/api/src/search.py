@@ -11,9 +11,9 @@ best-scoring chunk as the matched snippet.
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
-from shared_core.vectorstore import VectorRecord, VectorStore
 
 from .embeddings import EmbeddingGenerator
+from .internal.vendor_core.vectorstore import VectorRecord, VectorStore
 
 
 class Note(BaseModel):
@@ -115,7 +115,7 @@ def semantic_search(
     embedder = embedder or EmbeddingGenerator(offline=True)
 
     if store is None:
-        from shared_core.vectorstore import InMemoryVectorStore
+        from .internal.vendor_core.vectorstore import InMemoryVectorStore
 
         store = build_vector_store(notes, embedder, InMemoryVectorStore())
 

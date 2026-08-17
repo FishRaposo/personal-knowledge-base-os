@@ -2,10 +2,10 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from shared_core.database import Base
 from sqlalchemy import create_engine
 
 from alembic import context
+from apps.api.src.internal.vendor_core.database import Base
 
 # The Python package root for this project is apps/api/src (loose modules), so we
 # import models the same way the app does: rooted at that directory.

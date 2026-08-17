@@ -37,7 +37,7 @@ files from it.
 ## 3. Secrets
 
 - API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) and the database/Redis URLs are
-  read from the environment / `.env` via `shared_core.config` (`SecretStr` for
+  read from the environment / `.env` via the internal `vendor_core.config` (`SecretStr` for
   keys). They are never hard-coded.
 - Secrets are unwrapped only at the call site that needs them (embeddings, LLM) and
   are not logged. The default configuration uses no keys at all.
@@ -49,7 +49,7 @@ files from it.
 - The relational store holds note content and JSON embeddings. If a vault contains
   private material, configure encryption-at-rest on the PostgreSQL volume.
 - The DB connection uses `pool_pre_ping` and bounded pool sizes from
-  `shared_core`; credentials come from `DATABASE_URL`.
+  the internal compatibility layer; credentials come from `DATABASE_URL`.
 
 ---
 
@@ -69,4 +69,4 @@ files from it.
 
 - Indexing is bounded by the `.md`-only filter today. For multi-tenant or public
   exposure, move indexing to the Celery worker (job id returned immediately) and
-  add rate limiting (`shared_core.ratelimit`) and the file-size/depth caps above.
+  add a local rate-limit adapter and the file-size/depth caps above.

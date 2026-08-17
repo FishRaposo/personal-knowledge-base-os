@@ -4,8 +4,7 @@ Uses ``shared_core.testing.MockDatabase`` (in-memory SQLite with the schema
 created) so persistence is exercised with NO real database.
 """
 
-from shared_core.testing import MockDatabase
-
+from apps.api.src.internal.vendor_core.testing import MockDatabase
 from apps.api.src.store import DatabaseNoteStore, InMemoryNoteStore
 
 

@@ -9,13 +9,12 @@ note store, an in-memory vector store, and the deterministic embedder/sim-LLM.
 
 from typing import Dict, List, Optional
 
-from shared_core.vectorstore import InMemoryVectorStore, VectorStore
-
 from .chat import chat_with_citations
 from .config import AppConfig
 from .embeddings import EmbeddingGenerator
 from .graph import BacklinksGraph
 from .indexer import NotesIndexer
+from .internal.vendor_core.vectorstore import InMemoryVectorStore, VectorStore
 from .search import build_vector_store, keyword_search, semantic_search
 from .store import InMemoryNoteStore, NoteStore
 

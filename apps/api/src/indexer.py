@@ -12,7 +12,12 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from shared_core.docparse import ChunkStrategy, MarkdownParser, chunk_text, compute_hash
+from .internal.vendor_core.docparse import (
+    ChunkStrategy,
+    MarkdownParser,
+    chunk_text,
+    compute_hash,
+)
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+?)\]\]")
 _HASHTAG_RE = re.compile(r"(?:^|\s)#([a-zA-Z][\w/-]*)")

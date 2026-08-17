@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
         cache: 'pip'
@@ -22,15 +22,21 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install ruff pyright pytest
-        pip install git+https://github.com/FishRaposo/operator-shared-core.git
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        python -m pip install -e ".[dev]"
 
     - name: Lint with Ruff
-      run: ruff check .
+      run: python -m ruff check apps/api/src tests examples scripts alembic
 
     - name: Format Check with Ruff
-      run: ruff format --check .
+      run: python -m ruff format --check apps/api/src tests examples scripts alembic
 
     - name: Run Tests
-      run: pytest
+      run: python -m pytest -q
+
+    - name: Type check
+      run: python -m pyright apps/api/src
+
+    - name: Build and inspect wheel
+      run: |
+        python -m build
+        python scripts/check_wheel_contents.py

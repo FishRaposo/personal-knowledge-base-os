@@ -9,26 +9,26 @@ note + backlinks browsing, a graph (nodes+edges) for visualization, and tags.
 """
 
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Optional, cast
 
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
-from shared_core.errors import (
-    BaseApplicationError,
-    NotFoundError,
-    ValidationError,
-    application_error_handler,
-)
-from shared_core.health import check_health
-from shared_core.logging import RequestLoggingMiddleware, setup_logging
-from shared_core.redis import RedisManager
-from shared_core.vectorstore import get_vector_store
 
 from . import db as db_module
 from .config import AppConfig
 from .engine import KnowledgeBase
 from .graph import BacklinksGraph
 from .indexer import NotesIndexer
+from .internal.vendor_core.errors import (
+    BaseApplicationError,
+    NotFoundError,
+    ValidationError,
+    application_error_handler,
+)
+from .internal.vendor_core.health import check_health
+from .internal.vendor_core.logging import RequestLoggingMiddleware, setup_logging
+from .internal.vendor_core.redis import RedisManager
+from .internal.vendor_core.vectorstore import get_vector_store
 
 config = AppConfig()
 setup_logging(level=config.LOG_LEVEL, service_name=config.APP_NAME)
@@ -79,7 +79,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_exception_handler(BaseApplicationError, application_error_handler)
+app.add_exception_handler(BaseApplicationError, cast(Any, application_error_handler))
 app.add_middleware(RequestLoggingMiddleware)
 
 

@@ -10,7 +10,7 @@ text without each call site juggling an event loop.
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from shared_core.embeddings import (
+from .internal.vendor_core.embeddings import (
     EmbeddingProvider,
     cosine_similarity,
     get_embedding_provider,

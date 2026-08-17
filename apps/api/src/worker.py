@@ -10,12 +10,11 @@ store via the ``db_available`` probe.
 
 from typing import Any, Dict
 
-from shared_core.tasks import create_celery_app
-from shared_core.vectorstore import get_vector_store
-
 from . import db as db_module
 from .config import AppConfig
 from .engine import KnowledgeBase
+from .internal.vendor_core.tasks import create_celery_app
+from .internal.vendor_core.vectorstore import get_vector_store
 
 config = AppConfig()
 celery_app = create_celery_app(

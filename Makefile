@@ -1,14 +1,13 @@
 .PHONY: install dev test lint format typecheck docker-up docker-down demo migrate clean
 
 install:
-	pip install -e "../shared-core[dev,docparse]"
-	pip install -r requirements.txt
+	python -m pip install -e ".[dev]"
 
 migrate:
 	alembic upgrade head
 
 dev:
-	python apps/api/src/main.py
+	python -m apps.api.src.main
 
 test:
 	pytest
