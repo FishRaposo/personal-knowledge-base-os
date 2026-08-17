@@ -278,3 +278,120 @@ def test_indexer_rejects_binary_and_oversized_notes(tmp_path):
     (vault / "large.md").write_text("x" * 11, encoding="utf-8")
     with pytest.raises(ValueError, match="byte limit"):
         NotesIndexer(max_file_size=10).parse_directory(str(vault))
+
+
+def test_register_vault_rejects_terminal_and_parent_symlinks(tmp_path, monkeypatch):
+    target = tmp_path / "target"
+    target.mkdir()
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: (
+            path.name in {"terminal", "parent-link"} or original_is_symlink(path)
+        ),
+    )
+    kb = KnowledgeBase()
+
+    with pytest.raises(ValueError, match="symlink"):
+        kb.register_vault("terminal", str(tmp_path / "terminal"))
+
+    with pytest.raises(ValueError, match="symlink"):
+        kb.register_vault("parent", str(tmp_path / "parent-link" / "child"))
+
+
+def test_edit_rejects_terminal_and_parent_symlink_components(tmp_path, monkeypatch):
+    vault = tmp_path / "vault"
+    nested = vault / "nested"
+    nested.mkdir(parents=True)
+    _write(vault, "nested/note.md", "# Note\noriginal")
+    kb = KnowledgeBase()
+    kb.register_vault("v", str(vault))
+    kb.index_vault(str(vault), vault_id="v")
+    stored = kb._state("v").note_store.get_note("note", vault_id="v")
+    assert stored is not None
+
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: (
+            path.name in {"terminal.md", "parent-link"} or original_is_symlink(path)
+        ),
+    )
+    stored["source"] = "terminal.md"
+    with pytest.raises(ValueError, match="symlink"):
+        kb.update_note("note", "unsafe", vault_id="v")
+
+    stored["source"] = "parent-link/note.md"
+    with pytest.raises(ValueError, match="symlink"):
+        kb.update_note("note", "unsafe", vault_id="v")
+
+
+def test_watcher_validation_failure_stops_background_state(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    bus = EventBus()
+    watcher = PollingVaultWatcher(
+        vault_id="v", root=vault, event_bus=bus, on_change=lambda: None
+    )
+    watcher.running = True
+    calls = 0
+
+    def wait_once(_timeout):
+        nonlocal calls
+        calls += 1
+        return calls > 1
+
+    def invalid_poll():
+        raise ValueError("invalid note")
+
+    watcher._stop.wait = wait_once
+    watcher.poll_once = invalid_poll
+    watcher._run()
+
+    assert watcher.running is False
+    assert [event["type"] for event in bus.replay(vault_id="v")] == [
+        "index_failed",
+        "watcher_stopped",
+    ]
+
+
+def test_get_index_maps_validation_errors_like_post(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+
+    main.kb = KnowledgeBase(config=main.config)
+    client = TestClient(main.app)
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "bad.md").write_bytes(b"\xff\xfe")
+    assert (
+        client.post("/vaults", json={"vault_id": "bad", "path": str(vault)}).status_code
+        == 200
+    )
+
+    response = client.get("/notes/index", params={"vault_id": "bad"})
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
+def test_vault_selection_is_explicit_and_default_compatible(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+
+    main.kb = KnowledgeBase(config=main.config)
+    client = TestClient(main.app)
+    vault = tmp_path / "work"
+    vault.mkdir()
+    client.post("/vaults", json={"vault_id": "work", "path": str(vault)})
+
+    assert client.get("/vaults").json()["selected"] == "default"
+    selected = client.post("/vaults/work/select")
+    assert selected.status_code == 200
+    assert selected.json()["selected"] == "work"
+    assert client.get("/vaults").json()["selected"] == "work"
+    assert client.post("/vaults/missing/select").status_code == 404

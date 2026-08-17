@@ -90,12 +90,20 @@ class PollingVaultWatcher:
         while not self._stop.wait(self.interval_seconds):
             try:
                 self.poll_once()
-            except (OSError, UnicodeError) as exc:
+            except (OSError, UnicodeError, ValueError) as exc:
                 self.event_bus.publish(
                     "index_failed",
                     vault_id=self.vault_id,
                     data={"error": type(exc).__name__},
                 )
+                self.running = False
+                self._stop.set()
+                self.event_bus.publish(
+                    "watcher_stopped",
+                    vault_id=self.vault_id,
+                    data={"error": type(exc).__name__},
+                )
+                break
 
 
 def optional_watchdog_available() -> bool:

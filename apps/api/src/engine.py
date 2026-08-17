@@ -25,6 +25,14 @@ from .store import InMemoryNoteStore, NoteStore
 from .watcher import PollingVaultWatcher
 
 
+def _reject_symlink_components(path: Path, *, label: str) -> None:
+    """Reject an unresolved path if any existing component is a symlink."""
+    unresolved = path.absolute()
+    for component in (unresolved, *unresolved.parents):
+        if component.is_symlink():
+            raise ValueError(f"{label} contains a symlink: {component}")
+
+
 @dataclass
 class _VaultState:
     note_store: NoteStore
@@ -36,7 +44,14 @@ class _VaultState:
 
 
 class KnowledgeBase:
-    """In-process knowledge-base engine over a markdown vault."""
+    """In-process knowledge-base engine over local markdown vaults.
+
+    Notes can use the optional durable ``NoteStore``. Vault registrations,
+    content-hash snapshots, vector/graph state, selected vault, saved searches,
+    flashcards/reviews, watcher handles, and replay events are deliberately
+    process-local in the offline default. The additive SQL models reserve durable
+    storage for adapters without claiming those adapters are active here.
+    """
 
     def __init__(
         self,
@@ -68,6 +83,7 @@ class KnowledgeBase:
         self.flashcards = FlashcardService()
         self._saved_searches: Dict[tuple[str, str], Dict] = {}
         self._watchers: Dict[str, PollingVaultWatcher] = {}
+        self._selected_vault_id = "default"
         self.indexer = NotesIndexer(
             chunk_size=self.config.CHUNK_SIZE,
             chunk_overlap=self.config.CHUNK_OVERLAP,
@@ -125,8 +141,7 @@ class KnowledgeBase:
         ):
             raise ValueError("vault_id must contain only letters, numbers, '_' or '-'")
         raw_root = Path(path)
-        if raw_root.is_symlink():
-            raise ValueError("vault path must be a non-symlink directory")
+        _reject_symlink_components(raw_root, label="vault path")
         root = raw_root.resolve(strict=False)
         if root.exists() and not root.is_dir():
             raise ValueError("vault path must be a non-symlink directory")
@@ -146,14 +161,23 @@ class KnowledgeBase:
     def list_vaults(self) -> List[Dict]:
         return [self.vault_metadata(vault_id) for vault_id in sorted(self._vaults)]
 
+    @property
+    def selected_vault_id(self) -> str:
+        return self._selected_vault_id
+
+    def select_vault(self, vault_id: str) -> Dict:
+        if vault_id not in self._vaults:
+            raise KeyError(vault_id)
+        self._selected_vault_id = vault_id
+        return {"selected": vault_id, "vault": self.vault_metadata(vault_id)}
+
     def index_vault(
         self, path: str, *, vault_id: str = "default", incremental: bool = False
     ) -> Dict:
         """Parse, embed, persist, and graph every note under ``path``."""
         state = self._state(vault_id)
         raw_path = Path(path)
-        if raw_path.is_symlink():
-            raise ValueError("vault root cannot be a symlink")
+        _reject_symlink_components(raw_path, label="vault root")
         resolved = raw_path.resolve(strict=False)
         if vault_id == "default":
             state.root = resolved
@@ -388,15 +412,13 @@ class KnowledgeBase:
         if state.root is None or not note.get("source"):
             raise ValueError("note has no editable vault source")
         root = state.root.resolve(strict=True)
-        target = (root / str(note["source"])).resolve(strict=False)
+        unresolved_target = root / str(note["source"])
+        _reject_symlink_components(unresolved_target, label="note path")
+        target = unresolved_target.resolve(strict=False)
         try:
             target.relative_to(root)
         except ValueError as exc:
             raise ValueError("note path is outside vault root") from exc
-        if target.is_symlink() or any(
-            parent.is_symlink() for parent in target.parents if parent != root
-        ):
-            raise ValueError("note path is outside vault root")
         target.write_text(content, encoding="utf-8")
         parsed = self.indexer.parse_note(content, source=str(note["source"]))
         # Preserve the route id even if a caller edited the source metadata elsewhere.

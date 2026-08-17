@@ -148,7 +148,7 @@ def _vault_path(vault_id: str, requested: Optional[str] = None) -> str:
 
 @app.get("/vaults")
 def list_vaults():
-    return {"vaults": kb.list_vaults(), "selected": "default"}
+    return {"vaults": kb.list_vaults(), "selected": kb.selected_vault_id}
 
 
 @app.post("/vaults")
@@ -157,6 +157,14 @@ def create_vault(payload: VaultRequest):
         return kb.register_vault(payload.vault_id, payload.path, name=payload.name)
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
+
+
+@app.post("/vaults/{vault_id}/select")
+def select_vault(vault_id: str):
+    try:
+        return kb.select_vault(vault_id)
+    except KeyError as exc:
+        raise NotFoundError(f"Vault '{vault_id}' not found") from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -185,7 +193,12 @@ def index_notes_get(
 ):
     """GET convenience wrapper around POST /notes/index (dashboard-friendly)."""
     resolved = _vault_path(vault_id, path)
-    summary = kb.index_vault(resolved, vault_id=vault_id, incremental=incremental)
+    try:
+        summary = kb.index_vault(resolved, vault_id=vault_id, incremental=incremental)
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValidationError(str(exc)) from exc
+    if summary["total_notes"] == 0:
+        raise ValidationError(f"No markdown notes found under '{resolved}'.")
     return {**summary, "graph": kb.get_graph(vault_id=vault_id)}
 
 
