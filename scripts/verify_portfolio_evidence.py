@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,14 @@ class EvidenceVerificationError(ValueError):
 
 def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
 
 
 def _read_json(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
@@ -55,8 +64,13 @@ def _validate_shape(report: dict[str, Any], manifest: dict[str, Any]) -> None:
         raise EvidenceVerificationError("malformed manifest format_version")
     if manifest["project"] != "personal-knowledge-base-os":
         raise EvidenceVerificationError("malformed manifest project")
-    if set(manifest["files"]) != {"report.json", "report.md"}:
+    files = manifest["files"]
+    if not isinstance(files, dict) or set(files) != {"report.json", "report.md"}:
         raise EvidenceVerificationError("malformed manifest files")
+    if not all(_is_sha256(value) for value in files.values()):
+        raise EvidenceVerificationError("malformed manifest file hash")
+    if not _is_sha256(manifest["reproducibility_hash"]):
+        raise EvidenceVerificationError("malformed manifest reproducibility hash")
     if set(report) != {
         "assertions",
         "capabilities",
@@ -70,7 +84,9 @@ def _validate_shape(report: dict[str, Any], manifest: dict[str, Any]) -> None:
         report["schema_version"] != "1.0"
         or report["project"] != "personal-knowledge-base-os"
         or report["mode"] != "offline"
+        or not _is_sha256(report["reproducibility_hash"])
         or not isinstance(report["capabilities"], dict)
+        or not report["capabilities"]
         or not isinstance(report["assertions"], dict)
         or not report["assertions"]
         or not all(value is True for value in report["assertions"].values())
@@ -155,7 +171,12 @@ def main() -> int:
         "bundle", nargs="?", type=Path, default=portfolio_demo.DEFAULT_OUTPUT
     )
     args = parser.parse_args()
-    print(verify_bundle(args.bundle))
+    try:
+        result_hash = verify_bundle(args.bundle)
+    except EvidenceVerificationError as exc:
+        print(f"evidence verification failed: {exc}", file=sys.stderr)
+        return 1
+    print(result_hash)
     return 0
 
 

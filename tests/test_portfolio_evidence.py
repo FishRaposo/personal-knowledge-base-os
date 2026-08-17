@@ -176,6 +176,73 @@ def test_verifier_rejects_structural_and_checksum_tampering(
         verify_portfolio_evidence.verify_bundle(bundle)
 
 
+@pytest.mark.parametrize(
+    ("mutation", "value"),
+    [
+        ("files", None),
+        ("file_hash", None),
+        ("reproducibility_hash", None),
+    ],
+)
+def test_verifier_rejects_canonical_manifest_type_errors_cleanly(
+    bundle: Path, mutation: str, value: object
+) -> None:
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    if mutation == "file_hash":
+        manifest["files"]["report.json"] = value
+    else:
+        manifest[mutation] = value
+    (bundle / "manifest.json").write_bytes(portfolio_demo.canonical_bytes(manifest))
+
+    with pytest.raises(
+        verify_portfolio_evidence.EvidenceVerificationError,
+        match="malformed manifest",
+    ):
+        verify_portfolio_evidence.verify_bundle(bundle)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("assertions", None),
+        ("capabilities", None),
+        ("reproducibility_hash", None),
+        ("schema_version", 1),
+    ],
+)
+def test_verifier_rejects_canonical_report_type_errors_cleanly(
+    bundle: Path, field: str, value: object
+) -> None:
+    report = json.loads((bundle / "report.json").read_text(encoding="utf-8"))
+    report[field] = value
+    (bundle / "report.json").write_bytes(portfolio_demo.canonical_bytes(report))
+
+    with pytest.raises(
+        verify_portfolio_evidence.EvidenceVerificationError,
+        match="malformed report",
+    ):
+        verify_portfolio_evidence.verify_bundle(bundle)
+
+
+def test_verifier_cli_reports_schema_failure_without_a_traceback(bundle: Path) -> None:
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+    manifest["files"] = None
+    (bundle / "manifest.json").write_bytes(portfolio_demo.canonical_bytes(manifest))
+
+    result = subprocess.run(
+        [sys.executable, "scripts/verify_portfolio_evidence.py", str(bundle)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "malformed manifest" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_verifier_rejects_self_consistent_semantic_tampering(
     bundle: Path, tmp_path: Path
 ) -> None:
