@@ -10,6 +10,7 @@ in-memory or the database store without an ORM dependency here.
 
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .internal.vendor_core.docparse import (
@@ -143,7 +144,7 @@ class NotesIndexer:
                 raise ValueError(f"Note is not valid UTF-8 text: {path}") from exc
             if "\x00" in raw:
                 raise ValueError(f"Binary note content is not allowed: {path}")
-            rel = os.path.relpath(path, folder_path)
+            rel = Path(os.path.relpath(path, folder_path)).as_posix()
             notes.append(self.parse_note(raw, source=rel))
         notes.sort(key=lambda note: note["id"])
         return notes
@@ -191,7 +192,10 @@ class NotesIndexer:
             "links": links,
             "tags": tags,
             "metadata": frontmatter,
-            "content_hash": compute_hash(body),
+            # Hash the canonical source payload, including frontmatter. Metadata-only
+            # edits must invalidate incremental snapshots even though ``content``
+            # remains the legacy body-only response field.
+            "content_hash": compute_hash(raw),
             "word_count": len(body.split()),
             "chunks": chunks,
         }

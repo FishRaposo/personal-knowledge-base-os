@@ -115,6 +115,7 @@ def test_safe_edit_stays_within_vault_and_emits_event(tmp_path):
 
 def test_tag_filter_and_saved_search_are_vault_scoped(tmp_path):
     kb = KnowledgeBase()
+    kb.register_vault("work", str(tmp_path))
     kb.index_notes(
         [
             {
@@ -144,6 +145,111 @@ def test_tag_filter_and_saved_search_are_vault_scoped(tmp_path):
     )
     assert kb.list_saved_searches(vault_id="work") == [saved]
     assert kb.list_saved_searches(vault_id="default") == []
+
+
+def test_unknown_vaults_are_rejected_until_explicitly_registered(tmp_path):
+    kb = KnowledgeBase()
+
+    with pytest.raises(KeyError, match="unknown"):
+        kb.index_vault(str(tmp_path), vault_id="unknown")
+    with pytest.raises(KeyError, match="unknown"):
+        kb.search("anything", vault_id="unknown")
+
+    assert [vault["id"] for vault in kb.list_vaults()] == ["default"]
+
+
+def test_api_rejects_unregistered_vault_index_path(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    _write(outside, "secret.md", "# Secret\nprivate")
+    main.kb = KnowledgeBase(config=main.config)
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/notes/index", json={"vault_id": "unknown", "path": str(outside)}
+    )
+
+    assert response.status_code == 404
+    assert "unknown" not in {vault["id"] for vault in main.kb.list_vaults()}
+
+
+def test_incremental_index_detects_frontmatter_only_change_and_source_move(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _write(vault, "folder/a.md", "---\ntitle: Before\ntags: [old]\n---\nbody")
+    kb = KnowledgeBase()
+    kb.register_vault("v", str(vault))
+    kb.index_vault(str(vault), vault_id="v", incremental=True)
+
+    _write(vault, "folder/a.md", "---\ntitle: After\ntags: [new]\n---\nbody")
+    changed = kb.index_vault(str(vault), vault_id="v", incremental=True)
+
+    assert changed["changes"] == {"added": [], "changed": ["a"], "deleted": []}
+    assert kb.get_note("a", vault_id="v")["title"] == "After"
+    assert kb.get_note("a", vault_id="v")["tags"] == ["new"]
+
+    (vault / "moved").mkdir()
+    (vault / "folder" / "a.md").replace(vault / "moved" / "a.md")
+    moved = kb.index_vault(str(vault), vault_id="v", incremental=True)
+
+    assert moved["changes"] == {"added": [], "changed": ["a"], "deleted": []}
+    assert kb.get_note("a", vault_id="v")["source"] == "moved/a.md"
+
+
+@pytest.mark.parametrize("mode", ["semantic", "hybrid"])
+def test_tag_filtered_vector_search_applies_limit_after_filtering(tmp_path, mode):
+    kb = KnowledgeBase()
+    kb.register_vault("work", str(tmp_path))
+    notes = [
+        {
+            "id": f"untagged-{index}",
+            "title": "Same",
+            "content": "identical semantic content",
+            "tags": ["drop"],
+            "links": [],
+            "chunks": [],
+        }
+        for index in range(25)
+    ]
+    notes.append(
+        {
+            "id": "tagged",
+            "title": "Same",
+            "content": "identical semantic content",
+            "tags": ["keep"],
+            "links": [],
+            "chunks": [],
+        }
+    )
+    kb.index_notes(notes, vault_id="work")
+
+    results = kb.search(
+        "identical semantic content",
+        limit=1,
+        mode=mode,
+        vault_id="work",
+        tags=["keep"],
+    )
+
+    assert [result["id"] for result in results] == ["tagged"]
+
+
+def test_invalid_event_replay_cursor_has_a_validation_envelope():
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+
+    main.kb = KnowledgeBase(config=main.config)
+    client = TestClient(main.app)
+
+    response = client.get("/events/replay", params={"last_event_id": "not-an-id"})
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "VALIDATION_ERROR"
 
 
 def test_flashcards_are_stable_cited_and_reviewable():
@@ -205,6 +311,44 @@ def test_polling_watcher_is_explicit_and_reports_changes(tmp_path):
         "note_changed",
         "watcher_stopped",
     ]
+
+
+def test_watcher_factory_falls_back_to_polling_when_watchdog_is_absent(
+    tmp_path, monkeypatch
+):
+    from apps.api.src import watcher as watcher_module
+
+    monkeypatch.setattr(watcher_module, "optional_watchdog_available", lambda: False)
+
+    watcher = watcher_module.create_vault_watcher(
+        vault_id="v",
+        root=tmp_path,
+        event_bus=EventBus(),
+        on_change=lambda: None,
+    )
+
+    assert isinstance(watcher, PollingVaultWatcher)
+    assert watcher.backend == "polling"
+
+
+def test_watcher_factory_uses_watchdog_adapter_when_available(tmp_path, monkeypatch):
+    from apps.api.src import watcher as watcher_module
+
+    class FakeWatchdog(watcher_module.PollingVaultWatcher):
+        backend = "watchdog"
+
+    monkeypatch.setattr(watcher_module, "optional_watchdog_available", lambda: True)
+    monkeypatch.setattr(watcher_module, "WatchdogVaultWatcher", FakeWatchdog)
+
+    watcher = watcher_module.create_vault_watcher(
+        vault_id="v",
+        root=tmp_path,
+        event_bus=EventBus(),
+        on_change=lambda: None,
+    )
+
+    assert isinstance(watcher, FakeWatchdog)
+    assert watcher.backend == "watchdog"
 
 
 def test_additive_api_routes_preserve_legacy_shapes(tmp_path):

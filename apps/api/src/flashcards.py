@@ -13,9 +13,17 @@ _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 class FlashcardService:
     """Process-local cards; provider enrichment is optional and fail-safe."""
 
-    def __init__(self, enricher: Optional[Callable[[Dict], Dict]] = None) -> None:
+    def __init__(
+        self,
+        enricher: Optional[Callable[[Dict], Dict]] = None,
+        *,
+        initial_cards: Iterable[Dict[str, Any]] = (),
+    ) -> None:
         self._cards: Dict[tuple[str, str], Dict[str, Any]] = {}
         self._enricher = enricher
+        for card in initial_cards:
+            restored = deepcopy(card)
+            self._cards[(restored["vault_id"], restored["id"])] = restored
 
     def generate(
         self,

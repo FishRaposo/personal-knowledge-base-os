@@ -16,6 +16,7 @@ Personal Knowledge Base OS turns local Markdown vaults into a navigable backlink
 - Safe local note editing: configured vault-root containment, symlink rejection, text/size validation, incremental re-indexing, and deterministic change events.
 - Explicit stdlib polling watchers, replayable Server-Sent Events (SSE), and a dashboard polling fallback. Watchers never start implicitly.
 - Deterministic, source-cited flashcards with local spaced-repetition review state; LLM enrichment is optional and falls back locally.
+- Optional SQLite runtime persistence for vault registrations, path-keyed snapshots, saved searches, flashcards/reviews, watcher metadata, and replay events; the zero-config default remains in memory.
 - SQLite/in-memory persistence fallbacks, additive Alembic schema, broker-free Celery imports, and an optional PostgreSQL/Redis/provider path.
 
 ## Architecture

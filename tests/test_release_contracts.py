@@ -39,14 +39,14 @@ def test_ci_runs_every_default_offline_release_gate() -> None:
     assert "DATABASE_URL: sqlite:///" in workflow
 
 
-def test_ci_labels_chromium_as_an_explicit_optional_gate() -> None:
+def test_ci_runs_chromium_on_push_and_pull_request() -> None:
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
     assert "run_playwright:" in workflow
     assert "npx playwright install --with-deps chromium" in workflow
     assert "npm run test:e2e -- --project=chromium" in workflow
-    assert "if: inputs.run_playwright" in workflow
+    assert "if: inputs.run_playwright" not in workflow
 
 
 def test_production_web_image_uses_standalone_output_without_dev_dependencies() -> None:

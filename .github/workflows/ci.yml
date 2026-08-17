@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       run_playwright:
-        description: Run the Chromium smoke test (downloads a browser runtime)
+        description: For a manual run, include the Chromium smoke test
         required: false
         default: false
         type: boolean
@@ -93,7 +93,7 @@ jobs:
       run: npm run build
 
   playwright:
-    if: inputs.run_playwright
+    if: github.event_name != 'workflow_dispatch' || inputs.run_playwright
     runs-on: ubuntu-latest
     defaults:
       run:

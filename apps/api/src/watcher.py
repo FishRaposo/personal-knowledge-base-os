@@ -1,5 +1,8 @@
 """Explicit stdlib polling watcher with an optional background loop."""
 
+# watchdog is an optional extra imported only after availability detection.
+# pyright: reportMissingImports=false
+
 from __future__ import annotations
 
 import threading
@@ -11,6 +14,8 @@ from .events import EventBus
 
 class PollingVaultWatcher:
     """Detect markdown file changes without requiring watchdog."""
+
+    backend = "polling"
 
     def __init__(
         self,
@@ -125,3 +130,58 @@ def optional_watchdog_available() -> bool:
         return importlib.util.find_spec("watchdog") is not None
     except (ImportError, ValueError):
         return False
+
+
+class WatchdogVaultWatcher(PollingVaultWatcher):
+    """Use watchdog notifications to accelerate the same deterministic scan."""
+
+    backend = "watchdog"
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
+
+        watcher = self
+
+        class MarkdownHandler(FileSystemEventHandler):
+            def on_any_event(self, event) -> None:
+                if event.is_directory:
+                    return
+                paths = [
+                    getattr(event, "src_path", ""),
+                    getattr(event, "dest_path", ""),
+                ]
+                if not any(
+                    str(path).lower().endswith((".md", ".markdown")) for path in paths
+                ):
+                    return
+                watcher.poll_once()
+
+        self._observer = Observer()
+        self._handler = MarkdownHandler()
+
+    def start(self, *, background: bool = True) -> None:
+        del background  # watchdog owns its background observer thread
+        if self.running:
+            return
+        super().start(background=False)
+        self._observer.schedule(self._handler, str(self.root), recursive=True)
+        self._observer.start()
+
+    def stop(self) -> None:
+        if not self.running:
+            return
+        self._observer.stop()
+        self._observer.join(timeout=max(self.interval_seconds * 2, 0.2))
+        super().stop()
+
+
+def create_vault_watcher(**kwargs) -> PollingVaultWatcher:
+    """Select watchdog acceleration when installed, otherwise stdlib polling."""
+    if optional_watchdog_available():
+        try:
+            return WatchdogVaultWatcher(**kwargs)
+        except (ImportError, RuntimeError):
+            pass
+    return PollingVaultWatcher(**kwargs)

@@ -140,4 +140,32 @@ describe("api client", () => {
     await api.getWatcher("default");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("http://localhost:8000/watchers/default");
   });
+
+  it("normalizes live backend flashcards into the rendered frontend contract", async () => {
+    const backendCard = {
+      id: "card-1",
+      vault_id: "default",
+      question: "What is local first?",
+      answer: "Data remains under user control.",
+      citation: { note_id: "local-first", source: "local-first.md" },
+      review: { interval_days: 3, due_in_days: 3 },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ cards: [backendCard] }), { status: 200 })
+      )
+    );
+
+    const result = await api.getFlashcards();
+
+    expect(result.data.flashcards[0]).toMatchObject({
+      id: "card-1",
+      front: "What is local first?",
+      back: "Data remains under user control.",
+      note_id: "local-first",
+      citations: ["local-first.md"],
+      interval_days: 3,
+    });
+  });
 });

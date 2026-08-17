@@ -7,11 +7,11 @@ Personal Knowledge Base OS is a local-first Markdown knowledge-base service. The
 | Layer | Responsibility | Offline default |
 | --- | --- | --- |
 | API | Legacy FastAPI routes plus additive vault, editing, watcher, events, saved-search, and flashcard routes. | In-process API with `vault_id="default"`. |
-| Engine | Coordinates indexing, stores, graph, retrieval, chat, event emission, and watcher lifecycle. | `KnowledgeBase` with process-local state. |
+| Engine | Coordinates indexing, stores, graph, retrieval, chat, event emission, and watcher lifecycle. | `KnowledgeBase`; in-memory by default, with explicit SQLite runtime-state persistence. |
 | Indexer | Parses Markdown, extracts metadata/wikilinks/tags, chunks content, and hashes normalized content. | Standard-library filesystem handling and vendored deterministic parser. |
 | Retrieval | Keyword, semantic, and hybrid result assembly with citations. | Hash embeddings and in-memory vector store. |
 | Graph | Forward/reverse links and graph export. | `{nodes, edges}` plus additive dangling metadata. |
-| Local productivity | Safe edits, snapshots/incremental changes, saved searches, flashcards, review scheduling. | Deterministic IDs and process-local services. |
+| Local productivity | Safe edits, snapshots/incremental changes, saved searches, flashcards, review scheduling. | Deterministic IDs; in-memory by default, SQLite-persisted when configured. |
 | Live updates | Explicit polling watcher, bounded replay buffer, SSE serialization. | No watcher at startup; caller starts it. |
 | Persistence | Notes/chunks and additive scoped records. | In-memory/SQLite-compatible service checks. |
 

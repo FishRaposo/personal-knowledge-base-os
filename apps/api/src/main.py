@@ -134,7 +134,10 @@ class FlashcardReviewRequest(BaseModel):
 
 def _vault_path(vault_id: str, requested: Optional[str] = None) -> str:
     """Resolve an API indexing path against an explicitly configured vault."""
-    metadata = kb.vault_metadata(vault_id)
+    try:
+        metadata = kb.vault_metadata(vault_id)
+    except KeyError as exc:
+        raise NotFoundError(f"Vault '{vault_id}' not found") from exc
     root = metadata.get("path")
     if requested is None:
         if not root:
@@ -339,7 +342,7 @@ def list_flashcards(vault_id: str = "default"):
 @app.post("/flashcards/{card_id}/review")
 def review_flashcard(card_id: str, payload: FlashcardReviewRequest):
     try:
-        return kb.flashcards.review(
+        return kb.review_flashcard(
             card_id, rating=payload.rating, vault_id=payload.vault_id
         )
     except KeyError as exc:
@@ -368,7 +371,10 @@ def stop_watcher(vault_id: str):
 
 @app.get("/events/replay")
 def replay_events(vault_id: str = "default", last_event_id: Optional[str] = None):
-    events = kb.events.replay(vault_id=vault_id, after_id=last_event_id)
+    try:
+        events = kb.events.replay(vault_id=vault_id, after_id=last_event_id)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
     return {
         "events": events,
         "last_event_id": events[-1]["id"] if events else last_event_id,
@@ -382,6 +388,10 @@ def stream_events(
     last_event_header: Optional[str] = Header(default=None, alias="Last-Event-ID"),
 ):
     cursor = last_event_id or last_event_header
+    try:
+        kb.events.parse_cursor(cursor)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
     return StreamingResponse(
         kb.events.stream(vault_id=vault_id, after_id=cursor),
         media_type="text/event-stream",

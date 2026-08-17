@@ -4,6 +4,7 @@ import type {
   ChatResponse,
   GraphResponse,
   Note,
+  Flashcard,
   FlashcardsResponse,
   SavedSearch,
   SavedSearchesResponse,
@@ -99,6 +100,27 @@ async function liveOrDemo<T>(
   }
 }
 
+type BackendFlashcard = Partial<Flashcard> & {
+  question?: string;
+  answer?: string;
+  citation?: { note_id?: string; source?: string };
+  review?: { interval_days?: number; due_in_days?: number };
+};
+
+function normalizeFlashcard(card: BackendFlashcard): Flashcard {
+  return {
+    id: String(card.id ?? ""),
+    vault_id: String(card.vault_id ?? "default"),
+    front: String(card.front ?? card.question ?? ""),
+    back: String(card.back ?? card.answer ?? ""),
+    note_id: String(card.note_id ?? card.citation?.note_id ?? ""),
+    citations:
+      card.citations ?? (card.citation?.source ? [card.citation.source] : []),
+    interval_days: card.interval_days ?? card.review?.interval_days,
+    due_at: card.due_at,
+  };
+}
+
 export const api = {
   async search(
     q: string,
@@ -175,8 +197,8 @@ export const api = {
   async getFlashcards(vaultId = "default"): Promise<SourcedResult<FlashcardsResponse>> {
     return liveOrDemo(
       async () => {
-        const raw = await rawRequest<{ cards: FlashcardsResponse["flashcards"] }>(`/flashcards?vault_id=${encodeURIComponent(vaultId)}`);
-        return { flashcards: raw.cards };
+        const raw = await rawRequest<{ cards: BackendFlashcard[] }>(`/flashcards?vault_id=${encodeURIComponent(vaultId)}`);
+        return { flashcards: raw.cards.map(normalizeFlashcard) };
       },
       mockFlashcards
     );
@@ -185,8 +207,8 @@ export const api = {
   async generateFlashcards(vaultId = "default", noteId?: string): Promise<SourcedResult<FlashcardsResponse>> {
     return liveOrDemo(
       async () => {
-        const raw = await rawRequest<{ cards: FlashcardsResponse["flashcards"] }>("/flashcards/generate", { method: "POST", body: JSON.stringify({ vault_id: vaultId, note_id: noteId }) });
-        return { flashcards: raw.cards };
+        const raw = await rawRequest<{ cards: BackendFlashcard[] }>("/flashcards/generate", { method: "POST", body: JSON.stringify({ vault_id: vaultId, note_id: noteId }) });
+        return { flashcards: raw.cards.map(normalizeFlashcard) };
       },
       mockFlashcards
     );

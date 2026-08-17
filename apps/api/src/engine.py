@@ -20,9 +20,10 @@ from .flashcards import FlashcardService
 from .graph import BacklinksGraph
 from .indexer import NotesIndexer
 from .internal.vendor_core.vectorstore import InMemoryVectorStore, VectorStore
+from .runtime_persistence import SQLiteRuntimePersistence, sqlite_runtime_persistence
 from .search import build_vector_store, keyword_search, semantic_search
 from .store import InMemoryNoteStore, NoteStore
-from .watcher import PollingVaultWatcher
+from .watcher import PollingVaultWatcher, create_vault_watcher
 
 
 def _reject_symlink_components(path: Path, *, label: str) -> None:
@@ -40,17 +41,16 @@ class _VaultState:
     graph: BacklinksGraph
     root: Optional[Path] = None
     name: str = ""
-    snapshots: Dict[str, str] = field(default_factory=dict)
+    snapshots: Dict[str, tuple[str, str]] = field(default_factory=dict)
 
 
 class KnowledgeBase:
     """In-process knowledge-base engine over local markdown vaults.
 
-    Notes can use the optional durable ``NoteStore``. Vault registrations,
-    content-hash snapshots, vector/graph state, selected vault, saved searches,
-    flashcards/reviews, watcher handles, and replay events are deliberately
-    process-local in the offline default. The additive SQL models reserve durable
-    storage for adapters without claiming those adapters are active here.
+    Notes can use the optional durable ``NoteStore``. The offline default keeps
+    runtime state in memory; an explicit SQLite URL activates the additive local
+    adapter for vaults, snapshots, saved searches, cards/reviews, watcher metadata,
+    and replay events. Vector/graph state and live watcher handles remain in-process.
     """
 
     def __init__(
@@ -61,8 +61,12 @@ class KnowledgeBase:
         vector_store: Optional[VectorStore] = None,
         embedder: Optional[EmbeddingGenerator] = None,
         api_keys: Optional[Dict[str, Optional[str]]] = None,
+        runtime_persistence: Optional[SQLiteRuntimePersistence] = None,
     ) -> None:
         self.config = config or AppConfig()
+        self._persistence = runtime_persistence or sqlite_runtime_persistence(
+            self.config.DATABASE_URL
+        )
         # Keep the unresolved configured path so a symlink alias remains visible
         # to the explicit validation performed when indexing starts.
         default_root = Path(self.config.DEFAULT_VAULT_PATH).absolute()
@@ -81,9 +85,35 @@ class KnowledgeBase:
             model=self.config.LLM_EMBEDDING_MODEL,
         )
         self.api_keys = api_keys or _api_keys_from_config(self.config)
-        self.events = EventBus()
-        self.flashcards = FlashcardService()
+        if self._persistence:
+            for vault in self._persistence.load_vaults():
+                if vault["id"] == "default":
+                    state = self._vaults["default"]
+                    state.root = (
+                        Path(vault["path"]) if vault.get("path") else state.root
+                    )
+                    state.name = vault["name"]
+                else:
+                    self._vaults[vault["id"]] = _VaultState(
+                        note_store=self._vaults["default"].note_store,
+                        vector_store=InMemoryVectorStore(),
+                        graph=BacklinksGraph(),
+                        root=Path(vault["path"]) if vault.get("path") else None,
+                        name=vault["name"],
+                    )
+            for vault_id, state in self._vaults.items():
+                state.snapshots = self._persistence.load_snapshots(vault_id)
+        self.events = EventBus(
+            initial_events=self._persistence.load_events() if self._persistence else (),
+            on_publish=self._persistence.save_event if self._persistence else None,
+        )
+        self.flashcards = FlashcardService(
+            initial_cards=self._persistence.load_cards() if self._persistence else ()
+        )
         self._saved_searches: Dict[tuple[str, str], Dict] = {}
+        if self._persistence:
+            for saved in self._persistence.load_saved_searches():
+                self._saved_searches[(saved["vault_id"], saved["id"])] = saved
         self._watchers: Dict[str, PollingVaultWatcher] = {}
         self._selected_vault_id = "default"
         self.indexer = NotesIndexer(
@@ -123,14 +153,10 @@ class KnowledgeBase:
         self._vaults["default"].graph = value
 
     def _state(self, vault_id: str = "default") -> _VaultState:
-        if vault_id not in self._vaults:
-            self._vaults[vault_id] = _VaultState(
-                note_store=self._vaults["default"].note_store,
-                vector_store=InMemoryVectorStore(),
-                graph=BacklinksGraph(),
-                name=vault_id,
-            )
-        return self._vaults[vault_id]
+        try:
+            return self._vaults[vault_id]
+        except KeyError as exc:
+            raise KeyError(f"Vault '{vault_id}' is not registered") from exc
 
     def register_vault(
         self, vault_id: str, path: str, *, name: Optional[str] = None
@@ -147,10 +173,21 @@ class KnowledgeBase:
         root = raw_root.resolve(strict=False)
         if root.exists() and not root.is_dir():
             raise ValueError("vault path must be a non-symlink directory")
-        state = self._state(vault_id)
+        state = self._vaults.get(vault_id)
+        if state is None:
+            state = _VaultState(
+                note_store=self._vaults["default"].note_store,
+                vector_store=InMemoryVectorStore(),
+                graph=BacklinksGraph(),
+                name=vault_id,
+            )
+            self._vaults[vault_id] = state
         state.root = root
         state.name = name or state.name or vault_id
-        return self.vault_metadata(vault_id)
+        metadata = self.vault_metadata(vault_id)
+        if self._persistence:
+            self._persistence.save_vault(metadata)
+        return metadata
 
     def vault_metadata(self, vault_id: str) -> Dict:
         state = self._state(vault_id)
@@ -182,8 +219,6 @@ class KnowledgeBase:
         _reject_symlink_components(raw_path, label="vault root")
         resolved = raw_path.resolve(strict=False)
         if vault_id == "default":
-            state.root = resolved
-        elif state.root is None:
             state.root = resolved
         elif resolved != state.root:
             raise ValueError("path is outside vault root")
@@ -247,9 +282,9 @@ class KnowledgeBase:
         state.note_store.replace_all(notes, vault_id=vault_id)
         build_vector_store(notes, self.embedder, state.vector_store)
         state.graph.build_graph(notes)
-        state.snapshots = {
-            note["id"]: str(note.get("content_hash", "")) for note in notes
-        }
+        state.snapshots = self._snapshots(notes)
+        if self._persistence:
+            self._persistence.save_snapshots(vault_id, state.snapshots)
         return {
             "indexed_path": path,
             "total_notes": len(notes),
@@ -259,17 +294,34 @@ class KnowledgeBase:
         }
 
     @staticmethod
-    def _changes(state: _VaultState, notes: List[Dict]) -> Dict[str, List[str]]:
-        current = {note["id"]: str(note.get("content_hash", "")) for note in notes}
-        previous = state.snapshots
+    def _snapshots(notes: List[Dict]) -> Dict[str, tuple[str, str]]:
         return {
-            "added": sorted(set(current) - set(previous)),
-            "changed": sorted(
-                note_id
-                for note_id in set(current) & set(previous)
-                if current[note_id] != previous[note_id]
-            ),
-            "deleted": sorted(set(previous) - set(current)),
+            str(note.get("source") or note["id"]): (
+                note["id"],
+                str(note.get("content_hash", "")),
+            )
+            for note in notes
+        }
+
+    @classmethod
+    def _changes(cls, state: _VaultState, notes: List[Dict]) -> Dict[str, List[str]]:
+        current = cls._snapshots(notes)
+        previous = state.snapshots
+        added_paths = set(current) - set(previous)
+        deleted_paths = set(previous) - set(current)
+        changed = {
+            current[path][0]
+            for path in set(current) & set(previous)
+            if current[path] != previous[path]
+        }
+        added_ids = {current[path][0] for path in added_paths}
+        deleted_ids = {previous[path][0] for path in deleted_paths}
+        moved_ids = added_ids & deleted_ids
+        changed.update(moved_ids)
+        return {
+            "added": sorted(added_ids - moved_ids),
+            "changed": sorted(changed),
+            "deleted": sorted(deleted_ids - moved_ids),
         }
 
     def reindex_from_store(self, *, vault_id: str = "default") -> None:
@@ -289,9 +341,7 @@ class KnowledgeBase:
                 self.embedder.embed_chunks(note["chunks"])
         build_vector_store(notes, self.embedder, state.vector_store)
         state.graph.build_graph(notes)
-        state.snapshots = {
-            note["id"]: str(note.get("content_hash", "")) for note in notes
-        }
+        state.snapshots = self._snapshots(notes)
 
     # ------------------------------------------------------------------ #
     # Retrieval
@@ -315,12 +365,23 @@ class KnowledgeBase:
                 for note in notes
                 if selected <= {tag.lower().lstrip("#") for tag in note.get("tags", [])}
             ]
+        filtered = bool(tags)
         if mode == "semantic":
             return semantic_search(
-                notes, query, limit, embedder=self.embedder, store=state.vector_store
+                notes,
+                query,
+                limit,
+                embedder=self.embedder,
+                store=None if filtered else state.vector_store,
             )
         if mode == "hybrid":
-            return self._hybrid(notes, query, limit, vector_store=state.vector_store)
+            return self._hybrid(
+                notes,
+                query,
+                limit,
+                vector_store=None if filtered else state.vector_store,
+                use_default_store=not filtered,
+            )
         return keyword_search(notes, query, limit)
 
     def _hybrid(
@@ -330,6 +391,7 @@ class KnowledgeBase:
         limit: int,
         *,
         vector_store: Optional[VectorStore] = None,
+        use_default_store: bool = True,
     ) -> List[Dict]:
         """Merge keyword + semantic results, de-duplicated by note id."""
         merged: Dict[str, Dict] = {}
@@ -340,7 +402,7 @@ class KnowledgeBase:
             query,
             limit,
             embedder=self.embedder,
-            store=vector_store or self.vector_store,
+            store=(vector_store or self.vector_store) if use_default_store else None,
         ):
             if result["id"] not in merged:
                 merged[result["id"]] = result
@@ -461,6 +523,8 @@ class KnowledgeBase:
             "tags": normalized_tags,
         }
         self._saved_searches[(vault_id, search_id)] = saved
+        if self._persistence:
+            self._persistence.save_search(saved)
         return dict(saved)
 
     def list_saved_searches(self, *, vault_id: str = "default") -> List[Dict]:
@@ -471,7 +535,10 @@ class KnowledgeBase:
         ]
 
     def delete_saved_search(self, search_id: str, *, vault_id: str = "default") -> bool:
-        return self._saved_searches.pop((vault_id, search_id), None) is not None
+        deleted = self._saved_searches.pop((vault_id, search_id), None) is not None
+        if deleted and self._persistence:
+            self._persistence.delete_search(vault_id, search_id)
+        return deleted
 
     def generate_flashcards(
         self,
@@ -483,7 +550,18 @@ class KnowledgeBase:
         notes = self._state(vault_id).note_store.list_notes(vault_id=vault_id)
         if note_id:
             notes = [note for note in notes if note.get("id") == note_id]
-        return self.flashcards.generate(notes, vault_id=vault_id, enrich=enrich)
+        cards = self.flashcards.generate(notes, vault_id=vault_id, enrich=enrich)
+        if self._persistence:
+            self._persistence.save_cards(cards)
+        return cards
+
+    def review_flashcard(
+        self, card_id: str, *, rating: int, vault_id: str = "default"
+    ) -> Dict:
+        card = self.flashcards.review(card_id, rating=rating, vault_id=vault_id)
+        if self._persistence:
+            self._persistence.save_cards([card])
+        return card
 
     def start_watcher(self, vault_id: str = "default") -> Dict:
         state = self._state(vault_id)
@@ -495,7 +573,7 @@ class KnowledgeBase:
             def reindex_changed_vault() -> None:
                 self.index_vault(str(state.root), vault_id=vault_id, incremental=True)
 
-            watcher = PollingVaultWatcher(
+            watcher = create_vault_watcher(
                 vault_id=vault_id,
                 root=state.root,
                 event_bus=self.events,
@@ -503,12 +581,24 @@ class KnowledgeBase:
             )
             self._watchers[vault_id] = watcher
         watcher.start()
+        if self._persistence:
+            self._persistence.save_watcher(
+                vault_id, running=True, backend=getattr(watcher, "backend", "polling")
+            )
         return self.watcher_status(vault_id)
 
     def stop_watcher(self, vault_id: str = "default") -> Dict:
         watcher = self._watchers.get(vault_id)
         if watcher:
             watcher.stop()
+        if self._persistence:
+            self._persistence.save_watcher(
+                vault_id,
+                running=False,
+                backend=getattr(watcher, "backend", "polling")
+                if watcher
+                else "polling",
+            )
         return self.watcher_status(vault_id)
 
     def watcher_status(self, vault_id: str = "default") -> Dict:
@@ -516,7 +606,7 @@ class KnowledgeBase:
         return {
             "vault_id": vault_id,
             "running": bool(watcher and watcher.running),
-            "backend": "polling",
+            "backend": getattr(watcher, "backend", "polling"),
         }
 
 

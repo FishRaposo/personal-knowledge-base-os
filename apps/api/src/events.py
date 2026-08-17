@@ -5,18 +5,26 @@ from __future__ import annotations
 import json
 import threading
 from collections import deque
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional
 
 
 class EventBus:
     """Process-local event sink with monotonic reconnect-safe identifiers."""
 
-    def __init__(self, max_events: int = 256) -> None:
+    def __init__(
+        self,
+        max_events: int = 256,
+        *,
+        initial_events: Iterable[Dict[str, Any]] = (),
+        on_publish: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> None:
         if max_events < 1:
             raise ValueError("max_events must be positive")
-        self._events: deque[Dict[str, Any]] = deque(maxlen=max_events)
-        self._next_id = 1
+        restored = [dict(event) for event in initial_events]
+        self._events: deque[Dict[str, Any]] = deque(restored, maxlen=max_events)
+        self._next_id = max((int(event["id"]) for event in restored), default=0) + 1
         self._condition = threading.Condition()
+        self._on_publish = on_publish
 
     def publish(
         self, event_type: str, *, vault_id: str = "default", data: Optional[Dict] = None
@@ -31,12 +39,24 @@ class EventBus:
             self._next_id += 1
             self._events.append(event)
             self._condition.notify_all()
+            if self._on_publish:
+                self._on_publish(dict(event))
             return dict(event)
+
+    @staticmethod
+    def parse_cursor(after_id: str | int | None) -> int:
+        try:
+            boundary = int(after_id or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("event cursor must be a non-negative integer") from exc
+        if boundary < 0:
+            raise ValueError("event cursor must be a non-negative integer")
+        return boundary
 
     def replay(
         self, *, vault_id: str = "default", after_id: str | int | None = None
     ) -> list[Dict[str, Any]]:
-        boundary = int(after_id or 0)
+        boundary = self.parse_cursor(after_id)
         with self._condition:
             return [
                 dict(event)
@@ -57,7 +77,7 @@ class EventBus:
         heartbeat_seconds: float = 15.0,
     ) -> Iterator[str]:
         """Yield replayed/new events, with comment heartbeats while idle."""
-        cursor = int(after_id or 0)
+        cursor = self.parse_cursor(after_id)
         while True:
             pending = self.replay(vault_id=vault_id, after_id=cursor)
             if pending:
