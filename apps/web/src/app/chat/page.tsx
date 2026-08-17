@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send, MessagesSquare, ShieldCheck, ShieldAlert, Bot, User } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatResponse } from "@/types";
@@ -31,6 +31,8 @@ export default function ChatPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const vaultId = useActiveVault();
+
+  useEffect(() => { setTurns([]); setBusy(false); }, [vaultId]);
   const endRef = useRef<HTMLDivElement>(null);
 
   async function ask(question: string) {

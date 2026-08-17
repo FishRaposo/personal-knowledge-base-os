@@ -6,6 +6,12 @@ import { API_BASE, api } from "@/lib/api";
 import { useActiveVault } from "@/components/VaultPicker";
 import type { LiveEvent } from "@/types";
 
+export function eventNameFromPayload(payload: unknown): LiveEvent["event"] | null {
+  if (!payload || typeof payload !== "object") return null;
+  const name = (payload as { event?: unknown; type?: unknown }).event ?? (payload as { type?: unknown }).type;
+  return typeof name === "string" ? name as LiveEvent["event"] : null;
+}
+
 export default function LiveVaultStatus() {
   const vaultId = useActiveVault();
   const [running, setRunning] = useState(false);
@@ -26,7 +32,7 @@ export default function LiveVaultStatus() {
       const receive = (message: MessageEvent<string>) => {
         try {
           const raw = JSON.parse(message.data) as Partial<LiveEvent> & { type?: string };
-          const event = raw.event ?? raw.type;
+          const event = eventNameFromPayload(raw);
           if (typeof event === "string") setLastEvent({ id: String(raw.id ?? ""), event: event as LiveEvent["event"], data: raw.data ?? raw as Record<string, unknown> });
         } catch { /* ignore malformed events */ }
       };
