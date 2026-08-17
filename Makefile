@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck docker-up docker-down demo migrate clean
+.PHONY: install dev test lint format typecheck docker-up docker-down demo evidence migrate clean
 
 install:
 	python -m pip install -e ".[dev]"
@@ -29,6 +29,10 @@ docker-down:
 
 demo:
 	python examples/run_demo.py
+
+evidence:
+	python scripts/portfolio_demo.py
+	python scripts/verify_portfolio_evidence.py
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
