@@ -112,7 +112,7 @@ export default function NoteView({ id }: { id: string }) {
               ) : null}
             </div>
           </header>
-          <NoteEditor note={note} onSaved={setNote} />
+          <NoteEditor note={note} vaultId={vaultId} onSaved={setNote} />
           <NoteMarkdown content={note.content} />
         </article>
 
