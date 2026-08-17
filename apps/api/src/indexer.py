@@ -109,11 +109,13 @@ class NotesIndexer:
         chunk_size: int = 512,
         chunk_overlap: int = 64,
         chunk_strategy: ChunkStrategy = ChunkStrategy.SEMANTIC,
+        max_file_size: int = 2 * 1024 * 1024,
     ) -> None:
         self.parser = MarkdownParser()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.chunk_strategy = chunk_strategy
+        self.max_file_size = max_file_size
 
     def parse_directory(
         self, folder_path: str, *, recursive: bool = True
@@ -127,8 +129,20 @@ class NotesIndexer:
         if not os.path.isdir(folder_path):
             return notes
         for path in self._iter_markdown_files(folder_path, recursive):
-            with open(path, "r", encoding="utf-8") as handle:
-                raw = handle.read()
+            if os.path.islink(path):
+                raise ValueError(f"Symlinked note is not allowed: {path}")
+            size = os.path.getsize(path)
+            if size > self.max_file_size:
+                raise ValueError(
+                    f"Note exceeds {self.max_file_size} byte limit: {path}"
+                )
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    raw = handle.read()
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"Note is not valid UTF-8 text: {path}") from exc
+            if "\x00" in raw:
+                raise ValueError(f"Binary note content is not allowed: {path}")
             rel = os.path.relpath(path, folder_path)
             notes.append(self.parse_note(raw, source=rel))
         notes.sort(key=lambda note: note["id"])
@@ -136,7 +150,16 @@ class NotesIndexer:
 
     def _iter_markdown_files(self, folder_path: str, recursive: bool):
         if recursive:
-            for root, _dirs, files in os.walk(folder_path):
+            for root, dirs, files in os.walk(folder_path, followlinks=False):
+                symlinks = [
+                    name for name in dirs if os.path.islink(os.path.join(root, name))
+                ]
+                if symlinks:
+                    raise ValueError(
+                        f"Symlinked directory is not allowed: "
+                        f"{os.path.join(root, sorted(symlinks)[0])}"
+                    )
+                dirs[:] = sorted(dirs)
                 for name in sorted(files):
                     if name.lower().endswith((".md", ".markdown")):
                         yield os.path.join(root, name)

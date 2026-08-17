@@ -5,7 +5,17 @@ from sqlalchemy import create_engine
 from alembic import context
 from apps.api.src.config import AppConfig
 from apps.api.src.internal.vendor_core.database import Base
-from apps.api.src.models import Note, NoteChunk  # noqa: F401
+from apps.api.src.models import (  # noqa: F401
+    FileSnapshot,
+    Flashcard,
+    FlashcardReviewState,
+    KnowledgeEvent,
+    Note,
+    NoteChunk,
+    SavedSearch,
+    Vault,
+    WatcherState,
+)
 
 config = context.config
 

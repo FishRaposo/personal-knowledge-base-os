@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BookOpenCheck, Bookmark, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
-import { selectedVault } from "@/components/VaultPicker";
+import { useActiveVault } from "@/components/VaultPicker";
 import LiveVaultStatus from "@/components/LiveVaultStatus";
 import type { Flashcard, SavedSearch } from "@/types";
 
@@ -12,7 +12,7 @@ export default function WorkspacePage() {
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
-  const vaultId = selectedVault();
+  const vaultId = useActiveVault();
   const load = useCallback(async () => {
     const [saved, flashcards] = await Promise.all([api.getSavedSearches(vaultId), api.getFlashcards(vaultId)]);
     setSearches(saved.data.searches);

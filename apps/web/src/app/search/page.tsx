@@ -8,7 +8,7 @@ import type { SearchMode, SearchResult } from "@/types";
 import SearchResultCard from "@/components/SearchResultCard";
 import DemoBadge from "@/components/DemoBadge";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/States";
-import { selectedVault } from "@/components/VaultPicker";
+import { useActiveVault } from "@/components/VaultPicker";
 
 const MODES: { value: SearchMode; label: string; hint: string }[] = [
   { value: "keyword", label: "Keyword", hint: "Exact lexical matches" },
@@ -27,6 +27,7 @@ export default function SearchPage() {
   const [demo, setDemo] = useState(false);
   const [submitted, setSubmitted] = useState("");
   const [tag, setTag] = useState("");
+  const vaultId = useActiveVault();
 
   const runSearch = useCallback(async (q: string, m: SearchMode) => {
     if (!q.trim()) return;
@@ -34,7 +35,7 @@ export default function SearchPage() {
     setError(null);
     setSubmitted(q);
     try {
-      const { data, source } = await api.search(q, m, 10, { vaultId: selectedVault(), tag: tag.trim() || undefined });
+      const { data, source } = await api.search(q, m, 10, { vaultId, tag: tag.trim() || undefined });
       setResults(data.results);
       setDemo(source === "demo");
     } catch (err) {
@@ -43,7 +44,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [tag]);
+  }, [tag, vaultId]);
 
   // Re-run when the mode changes after an initial search.
   useEffect(() => {

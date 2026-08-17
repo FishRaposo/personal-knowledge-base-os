@@ -17,6 +17,17 @@ export function setSelectedVault(vaultId: string) {
   window.dispatchEvent(new CustomEvent("pkb:vault-changed", { detail: vaultId }));
 }
 
+export function useActiveVault(): string {
+  const [vaultId, setVaultId] = useState("default");
+  useEffect(() => {
+    const refresh = () => setVaultId(selectedVault());
+    refresh();
+    window.addEventListener("pkb:vault-changed", refresh);
+    return () => window.removeEventListener("pkb:vault-changed", refresh);
+  }, []);
+  return vaultId;
+}
+
 export default function VaultPicker() {
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [value, setValue] = useState("default");

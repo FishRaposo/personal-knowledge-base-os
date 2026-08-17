@@ -9,7 +9,7 @@ import GraphCanvas from "@/components/GraphCanvas";
 import DemoBadge from "@/components/DemoBadge";
 import TagPill from "@/components/TagPill";
 import { EmptyState, ErrorState, Spinner } from "@/components/States";
-import { selectedVault } from "@/components/VaultPicker";
+import { useActiveVault } from "@/components/VaultPicker";
 
 export default function GraphPage() {
   const [graph, setGraph] = useState<GraphResponse | null>(null);
@@ -17,12 +17,13 @@ export default function GraphPage() {
   const [error, setError] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const vaultId = useActiveVault();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, source } = await api.getGraph(selectedVault());
+      const { data, source } = await api.getGraph(vaultId);
       setGraph(data);
       setDemo(source === "demo");
     } catch (err) {
@@ -30,7 +31,7 @@ export default function GraphPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [vaultId]);
 
   useEffect(() => {
     load();

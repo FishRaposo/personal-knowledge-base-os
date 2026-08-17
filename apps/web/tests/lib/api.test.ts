@@ -107,7 +107,7 @@ describe("api client", () => {
       expect.anything()
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("tag=ops"),
+      expect.stringContaining("tags=ops"),
       expect.anything()
     );
   });
@@ -126,5 +126,18 @@ describe("api client", () => {
     ).resolves.toMatchObject({ source: "demo" });
     await expect(api.getSavedSearches("default")).resolves.toMatchObject({ source: "demo" });
     await expect(api.getFlashcards("default")).resolves.toMatchObject({ source: "demo" });
+  });
+
+  it("normalizes additive backend response keys and exact paths", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("saved-searches")) return new Response(JSON.stringify({ saved_searches: [] }), { status: 200 });
+      if (url.includes("flashcards")) return new Response(JSON.stringify({ cards: [] }), { status: 200 });
+      return new Response(JSON.stringify({ vault_id: "default", running: false }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(api.getSavedSearches()).resolves.toMatchObject({ data: { searches: [] } });
+    await expect(api.getFlashcards()).resolves.toMatchObject({ data: { flashcards: [] } });
+    await api.getWatcher("default");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("http://localhost:8000/watchers/default");
   });
 });

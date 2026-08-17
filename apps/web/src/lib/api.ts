@@ -112,7 +112,7 @@ export const api = {
       limit: String(limit),
     });
     if (options.vaultId) params.set("vault_id", options.vaultId);
-    if (options.tag) params.set("tag", options.tag);
+    if (options.tag) params.set("tags", options.tag);
     return liveOrDemo(
       () => rawRequest<SearchResponse>(`/notes/search?${params}`),
       () => {
@@ -157,7 +157,10 @@ export const api = {
 
   async getSavedSearches(vaultId = "default"): Promise<SourcedResult<SavedSearchesResponse>> {
     return liveOrDemo(
-      () => rawRequest<SavedSearchesResponse>(`/saved-searches?vault_id=${encodeURIComponent(vaultId)}`),
+      async () => {
+        const raw = await rawRequest<{ saved_searches: SavedSearch[] }>(`/saved-searches?vault_id=${encodeURIComponent(vaultId)}`);
+        return { searches: raw.saved_searches };
+      },
       mockSavedSearches
     );
   },
@@ -171,14 +174,20 @@ export const api = {
 
   async getFlashcards(vaultId = "default"): Promise<SourcedResult<FlashcardsResponse>> {
     return liveOrDemo(
-      () => rawRequest<FlashcardsResponse>(`/flashcards?vault_id=${encodeURIComponent(vaultId)}`),
+      async () => {
+        const raw = await rawRequest<{ cards: FlashcardsResponse["flashcards"] }>(`/flashcards?vault_id=${encodeURIComponent(vaultId)}`);
+        return { flashcards: raw.cards };
+      },
       mockFlashcards
     );
   },
 
   async generateFlashcards(vaultId = "default", noteId?: string): Promise<SourcedResult<FlashcardsResponse>> {
     return liveOrDemo(
-      () => rawRequest<FlashcardsResponse>("/flashcards/generate", { method: "POST", body: JSON.stringify({ vault_id: vaultId, note_id: noteId }) }),
+      async () => {
+        const raw = await rawRequest<{ cards: FlashcardsResponse["flashcards"] }>("/flashcards/generate", { method: "POST", body: JSON.stringify({ vault_id: vaultId, note_id: noteId }) });
+        return { flashcards: raw.cards };
+      },
       mockFlashcards
     );
   },
@@ -192,7 +201,7 @@ export const api = {
 
   async getWatcher(vaultId = "default"): Promise<SourcedResult<WatcherStatus>> {
     return liveOrDemo(
-      () => rawRequest<WatcherStatus>(`/watchers/${encodeURIComponent(vaultId)}/status`),
+      () => rawRequest<WatcherStatus>(`/watchers/${encodeURIComponent(vaultId)}`),
       () => mockWatcherStatus(vaultId)
     );
   },

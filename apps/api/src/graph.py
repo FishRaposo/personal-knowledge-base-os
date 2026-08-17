@@ -29,12 +29,14 @@ class BacklinksGraph:
         self.adj_list: Dict[str, Set[str]] = {}
         self._titles: Dict[str, str] = {}
         self._tags: Dict[str, List[str]] = {}
+        self._dangling: Set[tuple[str, str]] = set()
 
     def build_graph(self, notes: List[Dict]) -> None:
         """Build the adjacency list from notes, resolving links to node keys."""
         self.adj_list = {}
         self._titles = {}
         self._tags = {}
+        self._dangling = set()
         # First pass: register every known node and an alias -> key index.
         alias_to_key: Dict[str, str] = {}
         for note in notes:
@@ -55,6 +57,8 @@ class BacklinksGraph:
                     continue
                 target = alias_to_key.get(_slug(link), link)
                 self.adj_list[key].add(target)
+                if _slug(link) not in alias_to_key:
+                    self._dangling.add((key, target))
 
     def get_backlinks(self, target: str) -> List[str]:
         """Return every node that links *to* ``target`` (resolved by slug)."""
@@ -77,7 +81,10 @@ class BacklinksGraph:
         edges: List[Dict] = []
         for src, dests in self.adj_list.items():
             for dest in dests:
-                edges.append({"source": src, "target": dest})
+                edge: Dict[str, object] = {"source": src, "target": dest}
+                if (src, dest) in self._dangling:
+                    edge["dangling"] = True
+                edges.append(edge)
                 backlink_counts[dest] = backlink_counts.get(dest, 0) + 1
         nodes = [
             {
@@ -91,7 +98,11 @@ class BacklinksGraph:
         ]
         nodes.sort(key=lambda node: node["id"])
         edges.sort(key=lambda edge: (edge["source"], edge["target"]))
-        return {"nodes": nodes, "edges": edges}
+        dangling_links = [
+            {"source": source, "target": target}
+            for source, target in sorted(self._dangling)
+        ]
+        return {"nodes": nodes, "edges": edges, "dangling_links": dangling_links}
 
     def _resolve(self, value: str) -> str:
         if value in self.adj_list:
