@@ -67,7 +67,8 @@ def test_forbidden_scanner_rejects_dependency_and_secret_fixtures(
     fixture.write_text(
         "from "
         + "shared_core import config\n"
-        + "TOKEN = 'ghp_123456789012345678901234567890123456'\n",
+        + "TOKEN = 'gh"
+        + "p_123456789012345678901234567890123456'\n",
         encoding="utf-8",
     )
 
