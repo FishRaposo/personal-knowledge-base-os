@@ -63,7 +63,9 @@ class KnowledgeBase:
         api_keys: Optional[Dict[str, Optional[str]]] = None,
     ) -> None:
         self.config = config or AppConfig()
-        default_root = Path(self.config.DEFAULT_VAULT_PATH).resolve()
+        # Keep the unresolved configured path so a symlink alias remains visible
+        # to the explicit validation performed when indexing starts.
+        default_root = Path(self.config.DEFAULT_VAULT_PATH).absolute()
         self._vaults: Dict[str, _VaultState] = {
             "default": _VaultState(
                 note_store=note_store or InMemoryNoteStore(),
@@ -411,6 +413,7 @@ class KnowledgeBase:
             raise KeyError(note_id)
         if state.root is None or not note.get("source"):
             raise ValueError("note has no editable vault source")
+        _reject_symlink_components(state.root, label="vault root")
         root = state.root.resolve(strict=True)
         unresolved_target = root / str(note["source"])
         _reject_symlink_components(unresolved_target, label="note path")

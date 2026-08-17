@@ -90,12 +90,14 @@ class PollingVaultWatcher:
         while not self._stop.wait(self.interval_seconds):
             try:
                 self.poll_once()
-            except (OSError, UnicodeError, ValueError) as exc:
-                self.event_bus.publish(
-                    "index_failed",
-                    vault_id=self.vault_id,
-                    data={"error": type(exc).__name__},
-                )
+            except Exception as exc:  # noqa: BLE001 - terminate truthfully on failure
+                recent = self.event_bus.replay(vault_id=self.vault_id)
+                if not recent or recent[-1]["type"] != "index_failed":
+                    self.event_bus.publish(
+                        "index_failed",
+                        vault_id=self.vault_id,
+                        data={"error": type(exc).__name__},
+                    )
                 self.running = False
                 self._stop.set()
                 self.event_bus.publish(

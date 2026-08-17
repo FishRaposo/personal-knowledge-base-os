@@ -140,9 +140,12 @@ def _vault_path(vault_id: str, requested: Optional[str] = None) -> str:
         if not root:
             raise ValidationError(f"Vault '{vault_id}' has no configured path.")
         return str(root)
-    requested_path = Path(requested).resolve(strict=False)
-    if root and requested_path != Path(root).resolve(strict=False):
+    requested_path = Path(requested)
+    if root and requested_path.resolve(strict=False) != Path(root).resolve(
+        strict=False
+    ):
         raise ValidationError("Index path is outside the configured vault root.")
+    # Preserve the unresolved spelling for the engine's symlink-component guard.
     return str(requested_path)
 
 

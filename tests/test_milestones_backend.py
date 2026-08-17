@@ -328,7 +328,8 @@ def test_edit_rejects_terminal_and_parent_symlink_components(tmp_path, monkeypat
         kb.update_note("note", "unsafe", vault_id="v")
 
 
-def test_watcher_validation_failure_stops_background_state(tmp_path):
+@pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
+def test_watcher_failure_stops_background_state(tmp_path, failure_type):
     vault = tmp_path / "vault"
     vault.mkdir()
     bus = EventBus()
@@ -344,7 +345,7 @@ def test_watcher_validation_failure_stops_background_state(tmp_path):
         return calls > 1
 
     def invalid_poll():
-        raise ValueError("invalid note")
+        raise failure_type("invalid note")
 
     watcher._stop.wait = wait_once
     watcher.poll_once = invalid_poll
@@ -355,6 +356,37 @@ def test_watcher_validation_failure_stops_background_state(tmp_path):
         "index_failed",
         "watcher_stopped",
     ]
+
+
+def test_watcher_does_not_duplicate_engine_index_failure(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    _write(vault, "note.md", "# Note\nvalid")
+    kb = KnowledgeBase()
+    kb.register_vault("v", str(vault))
+    kb.index_vault(str(vault), vault_id="v")
+    kb.events = EventBus()
+    watcher = PollingVaultWatcher(
+        vault_id="v",
+        root=vault,
+        event_bus=kb.events,
+        on_change=lambda: kb.index_vault(str(vault), vault_id="v", incremental=True),
+    )
+    watcher.start(background=False)
+    (vault / "note.md").write_bytes(b"\xff\xfe")
+    calls = 0
+
+    def wait_once(_timeout):
+        nonlocal calls
+        calls += 1
+        return calls > 1
+
+    watcher._stop.wait = wait_once
+    watcher._run()
+    event_types = [event["type"] for event in kb.events.replay(vault_id="v")]
+
+    assert event_types.count("index_failed") == 1
+    assert event_types[-1] == "watcher_stopped"
 
 
 def test_get_index_maps_validation_errors_like_post(tmp_path):
@@ -395,3 +427,92 @@ def test_vault_selection_is_explicit_and_default_compatible(tmp_path):
     assert selected.json()["selected"] == "work"
     assert client.get("/vaults").json()["selected"] == "work"
     assert client.post("/vaults/missing/select").status_code == 404
+
+
+def test_edit_rejects_root_replaced_by_symlink_after_registration(
+    tmp_path, monkeypatch
+):
+    vault = tmp_path / "vault"
+    outside = tmp_path / "outside"
+    vault.mkdir()
+    outside.mkdir()
+    _write(vault, "note.md", "# Note\ninside")
+    _write(outside, "note.md", "# Note\noutside")
+    kb = KnowledgeBase()
+    kb.register_vault("v", str(vault))
+    kb.index_vault(str(vault), vault_id="v")
+    original_resolve = Path.resolve
+    original_is_symlink = Path.is_symlink
+
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: path == vault or original_is_symlink(path),
+    )
+    monkeypatch.setattr(
+        Path,
+        "resolve",
+        lambda path, strict=False: (
+            outside if path == vault else original_resolve(path, strict=strict)
+        ),
+    )
+
+    with pytest.raises(ValueError, match="symlink"):
+        kb.update_note("note", "unsafe", vault_id="v")
+    assert (outside / "note.md").read_text(encoding="utf-8").endswith("outside")
+
+
+def test_index_route_preserves_requested_symlink_for_engine_validation(
+    tmp_path, monkeypatch
+):
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+
+    main.kb = KnowledgeBase(config=main.config)
+    client = TestClient(main.app)
+    configured = Path(main.kb.vault_metadata("default")["path"])
+    alias = tmp_path / "alias"
+    original_resolve = Path.resolve
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: path == alias or original_is_symlink(path),
+    )
+    monkeypatch.setattr(
+        Path,
+        "resolve",
+        lambda path, strict=False: (
+            configured if path == alias else original_resolve(path, strict=strict)
+        ),
+    )
+
+    response = client.get("/notes/index", params={"path": str(alias)})
+
+    assert response.status_code == 400
+    assert "symlink" in response.json()["message"].lower()
+
+
+def test_default_config_symlink_is_not_resolved_before_route_validation(
+    tmp_path, monkeypatch
+):
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+    from apps.api.src.config import AppConfig
+
+    default_link = tmp_path / "default-link"
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: path.name == "default-link" or original_is_symlink(path),
+    )
+    main.kb = KnowledgeBase(config=AppConfig(DEFAULT_VAULT_PATH=str(default_link)))
+    client = TestClient(main.app)
+
+    response = client.get("/notes/index")
+
+    assert response.status_code == 400
+    assert "symlink" in response.json()["message"].lower()
