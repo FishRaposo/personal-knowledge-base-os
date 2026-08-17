@@ -42,10 +42,7 @@ The vendored compatibility closure lives at `apps/api/src/internal/vendor_core/`
 # Python API and verification tooling
 python -m pip install -e ".[dev]"
 
-# Optional root TypeScript tooling (when present)
-npm ci
-
-# Dashboard
+# Dashboard (the only Node package in this repository)
 cd apps/web
 npm ci
 ```

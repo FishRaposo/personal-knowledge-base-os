@@ -15,8 +15,8 @@ The reasoning behind the major technical choices in this service.
   same output every run.
 - **How**: internal `vendor_core.embeddings.get_embedding_provider(offline=True)` (hash
   fallback), internal `vendor_core.vectorstore.get_vector_store(offline=True)` (in-memory),
-  a simulated chat answer mirroring `llm-cost-latency-monitor`'s SDK, and a DB
-  probe with in-memory fallback.
+  the SDK-owned deterministic citation-bearing chat path, and a DB probe with
+  in-memory fallback.
 
 ---
 
@@ -90,12 +90,12 @@ The reasoning behind the major technical choices in this service.
 ## 7. Monorepo layout (`apps/api/src/`)
 
 - **Decision**: Keep the backend under `apps/api/` with the Python package root at
-  `apps/api/src` (loose modules imported via the `apps.api.src` package), leaving
-  room for a future `apps/web/`.
-- **Rationale**: A knowledge base wants a rich graph UI. Isolating the Python
-  service from a future Node/React frontend keeps environments modular. The API
-  already exposes everything a dashboard needs (search, graph, chat, tags, stats)
-  so the frontend is purely additive.
+  `apps/api/src` (modules imported via `apps.api.src`) and the delivered dashboard
+  under `apps/web/`.
+- **Rationale**: Separating the Python API from the Next.js/React dashboard keeps
+  their package managers and verification gates modular. The frontend consumes
+  legacy and additive API contracts without making the offline engine depend on a
+  browser runtime.
 
 ---
 
