@@ -6,7 +6,8 @@ tags: [ai, retrieval, infrastructure]
 # Embeddings
 
 An embedding turns text into a vector so similar meanings sit close together in
-vector space. This vault uses two interchangeable providers from `shared_core`.
+vector space. This vault uses two interchangeable providers from the project's
+internal vendored core.
 
 ## Offline (default)
 A deterministic SHA-256 hash fallback produces stable 384-dimensional vectors with

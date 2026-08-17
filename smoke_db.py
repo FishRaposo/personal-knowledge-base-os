@@ -2,9 +2,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath("."))
-from apps.api.src.internal.vendor_core.testing import MockDatabase
-
 from apps.api.src.engine import KnowledgeBase
+from apps.api.src.internal.vendor_core.testing import MockDatabase
 from apps.api.src.store import DatabaseNoteStore
 
 db = MockDatabase()

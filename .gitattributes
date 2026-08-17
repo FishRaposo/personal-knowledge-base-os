@@ -1,0 +1,3 @@
+# tests/test_portfolio_evidence.py byte-compares this golden against freshly
+# generated canonical bytes, which are always LF - never convert it to CRLF.
+tests/fixtures/golden/portfolio-evidence.json -text
