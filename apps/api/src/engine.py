@@ -509,6 +509,7 @@ class KnowledgeBase:
         tags: Optional[List[str]] = None,
         vault_id: str = "default",
     ) -> Dict:
+        self._state(vault_id)
         if mode not in {"keyword", "semantic", "hybrid"}:
             raise ValueError("invalid search mode")
         normalized_tags = sorted({tag.lower().lstrip("#") for tag in tags or []})
@@ -522,12 +523,22 @@ class KnowledgeBase:
             "mode": mode,
             "tags": normalized_tags,
         }
+        replaced = [
+            key
+            for key, value in self._saved_searches.items()
+            if key[0] == vault_id and value["name"] == name and key[1] != search_id
+        ]
+        for key in replaced:
+            self._saved_searches.pop(key)
+            if self._persistence:
+                self._persistence.delete_search(vault_id, key[1])
         self._saved_searches[(vault_id, search_id)] = saved
         if self._persistence:
             self._persistence.save_search(saved)
         return dict(saved)
 
     def list_saved_searches(self, *, vault_id: str = "default") -> List[Dict]:
+        self._state(vault_id)
         return [
             dict(value)
             for (scope, _), value in sorted(self._saved_searches.items())
@@ -535,6 +546,7 @@ class KnowledgeBase:
         ]
 
     def delete_saved_search(self, search_id: str, *, vault_id: str = "default") -> bool:
+        self._state(vault_id)
         deleted = self._saved_searches.pop((vault_id, search_id), None) is not None
         if deleted and self._persistence:
             self._persistence.delete_search(vault_id, search_id)

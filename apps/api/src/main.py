@@ -66,7 +66,8 @@ async def lifespan(app: FastAPI):
                 kb.vector_store = vector_store
             except Exception:  # noqa: BLE001 - non-fatal; keep in-memory vectors
                 pass
-        kb.reindex_from_store()
+        for vault in kb.list_vaults():
+            kb.reindex_from_store(vault_id=vault["id"])
     yield
 
 
@@ -134,10 +135,7 @@ class FlashcardReviewRequest(BaseModel):
 
 def _vault_path(vault_id: str, requested: Optional[str] = None) -> str:
     """Resolve an API indexing path against an explicitly configured vault."""
-    try:
-        metadata = kb.vault_metadata(vault_id)
-    except KeyError as exc:
-        raise NotFoundError(f"Vault '{vault_id}' not found") from exc
+    metadata = _require_vault(vault_id)
     root = metadata.get("path")
     if requested is None:
         if not root:
@@ -150,6 +148,14 @@ def _vault_path(vault_id: str, requested: Optional[str] = None) -> str:
         raise ValidationError("Index path is outside the configured vault root.")
     # Preserve the unresolved spelling for the engine's symlink-component guard.
     return str(requested_path)
+
+
+def _require_vault(vault_id: str) -> dict:
+    """Translate engine namespace misses into the public not-found envelope."""
+    try:
+        return kb.vault_metadata(vault_id)
+    except KeyError as exc:
+        raise NotFoundError(f"Vault '{vault_id}' not found") from exc
 
 
 @app.get("/vaults")
@@ -220,6 +226,7 @@ def search_notes(
     tags: Optional[str] = None,
 ):
     """Search indexed notes by keyword, semantic similarity, or hybrid."""
+    _require_vault(vault_id)
     tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
     results = kb.search(q, limit, mode=mode, vault_id=vault_id, tags=tag_list)
     return {"query": q, "mode": mode, "results": results, "total": len(results)}
@@ -275,6 +282,7 @@ def note_backlinks(note_id: str, vault_id: str = "default"):
 @app.get("/graph")
 def get_graph(vault_id: str = "default"):
     """Return the note graph as ``{nodes, edges}`` for a visualization UI."""
+    _require_vault(vault_id)
     return kb.get_graph(vault_id=vault_id)
 
 
@@ -295,11 +303,13 @@ def get_stats(vault_id: str = "default"):
 # --------------------------------------------------------------------------- #
 @app.get("/saved-searches")
 def list_saved_searches(vault_id: str = "default"):
+    _require_vault(vault_id)
     return {"saved_searches": kb.list_saved_searches(vault_id=vault_id)}
 
 
 @app.post("/saved-searches")
 def create_saved_search(payload: SavedSearchRequest):
+    _require_vault(payload.vault_id)
     try:
         return kb.save_search(
             name=payload.name,
@@ -314,6 +324,7 @@ def create_saved_search(payload: SavedSearchRequest):
 
 @app.delete("/saved-searches/{search_id}")
 def delete_saved_search(search_id: str, vault_id: str = "default"):
+    _require_vault(vault_id)
     if not kb.delete_saved_search(search_id, vault_id=vault_id):
         raise NotFoundError(f"Saved search '{search_id}' not found")
     return {"deleted": True, "id": search_id}
@@ -353,11 +364,13 @@ def review_flashcard(card_id: str, payload: FlashcardReviewRequest):
 
 @app.get("/watchers/{vault_id}")
 def watcher_status(vault_id: str):
+    _require_vault(vault_id)
     return kb.watcher_status(vault_id)
 
 
 @app.post("/watchers/{vault_id}/start")
 def start_watcher(vault_id: str):
+    _require_vault(vault_id)
     try:
         return kb.start_watcher(vault_id)
     except ValueError as exc:
@@ -366,6 +379,7 @@ def start_watcher(vault_id: str):
 
 @app.post("/watchers/{vault_id}/stop")
 def stop_watcher(vault_id: str):
+    _require_vault(vault_id)
     return kb.stop_watcher(vault_id)
 
 

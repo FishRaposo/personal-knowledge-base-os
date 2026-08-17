@@ -236,3 +236,22 @@ def test_sqlite_runtime_state_survives_engine_restart(tmp_path: Path) -> None:
     assert restored[0]["review"]["repetitions"] == 1
     assert second.events.replay(vault_id="work")[-1]["type"] == "note_changed"
     assert second._state("work").snapshots == snapshots
+
+
+def test_sqlite_saved_search_name_replacement_is_durable(tmp_path: Path) -> None:
+    database = tmp_path / "runtime.db"
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    config = AppConfig(DATABASE_URL=f"sqlite:///{database.as_posix()}")
+    first = KnowledgeBase(config=config)
+    first.register_vault("work", str(vault))
+
+    original = first.save_search(name="Daily", query="old", vault_id="work")
+    replacement = first.save_search(
+        name="Daily", query="new", mode="hybrid", vault_id="work"
+    )
+
+    assert replacement["id"] != original["id"]
+    assert first.list_saved_searches(vault_id="work") == [replacement]
+    restarted = KnowledgeBase(config=config)
+    assert restarted.list_saved_searches(vault_id="work") == [replacement]

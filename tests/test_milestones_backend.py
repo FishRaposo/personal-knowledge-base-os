@@ -177,6 +177,62 @@ def test_api_rejects_unregistered_vault_index_path(tmp_path):
     assert "unknown" not in {vault["id"] for vault in main.kb.list_vaults()}
 
 
+def test_unknown_vault_api_paths_return_controlled_not_found_envelopes():
+    from fastapi.testclient import TestClient
+
+    from apps.api.src import main
+
+    main.kb = KnowledgeBase(config=main.config)
+    client = TestClient(main.app)
+    requests = [
+        client.get("/notes/search", params={"q": "x", "vault_id": "missing"}),
+        client.get("/graph", params={"vault_id": "missing"}),
+        client.post("/watchers/missing/start"),
+        client.get("/saved-searches", params={"vault_id": "missing"}),
+        client.post(
+            "/saved-searches",
+            json={"vault_id": "missing", "name": "X", "query": "x"},
+        ),
+    ]
+
+    assert [response.status_code for response in requests] == [404] * len(requests)
+    assert all(response.json()["error"] == "NOT_FOUND" for response in requests)
+    assert [vault["id"] for vault in main.kb.list_vaults()] == ["default"]
+
+
+def test_lifespan_reindexes_every_restored_vault(monkeypatch, tmp_path):
+    import asyncio
+
+    from apps.api.src import main
+    from apps.api.src.internal.vendor_core.vectorstore import InMemoryVectorStore
+    from apps.api.src.store import InMemoryNoteStore
+
+    main.kb = KnowledgeBase(config=main.config)
+    main.kb.register_vault("work", str(tmp_path))
+    restored = InMemoryNoteStore()
+    calls: list[str] = []
+    monkeypatch.setattr(main.db_module, "check_db", lambda: None)
+    monkeypatch.setattr(main.db_module, "db_available", True)
+    monkeypatch.setattr(main.db_module, "build_store", lambda: restored)
+    monkeypatch.setattr(
+        main, "get_vector_store", lambda **_kwargs: InMemoryVectorStore()
+    )
+    monkeypatch.setattr(
+        main.kb,
+        "reindex_from_store",
+        lambda *, vault_id="default": calls.append(vault_id),
+    )
+
+    async def run_lifespan() -> None:
+        async with main.lifespan(main.app):
+            pass
+
+    asyncio.run(run_lifespan())
+
+    assert calls == ["default", "work"]
+    assert main.kb.note_store is restored
+
+
 def test_incremental_index_detects_frontmatter_only_change_and_source_move(tmp_path):
     vault = tmp_path / "vault"
     vault.mkdir()
