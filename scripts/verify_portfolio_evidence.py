@@ -35,8 +35,23 @@ def _is_sha256(value: object) -> bool:
     )
 
 
+def _read_required(path: Path) -> bytes:
+    try:
+        if not path.is_file():
+            raise EvidenceVerificationError(
+                f"evidence member is not a regular file: {path.name}"
+            )
+        return path.read_bytes()
+    except EvidenceVerificationError:
+        raise
+    except OSError as exc:
+        raise EvidenceVerificationError(
+            f"unable to read evidence file: {path.name}"
+        ) from exc
+
+
 def _read_json(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
-    raw = path.read_bytes()
+    raw = _read_required(path)
     try:
         parsed = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -95,7 +110,7 @@ def _validate_shape(report: dict[str, Any], manifest: dict[str, Any]) -> None:
 
 
 def _validate_checksums(bundle: Path, expected: dict[str, bytes]) -> None:
-    checksum_bytes = (bundle / "checksums.sha256").read_bytes()
+    checksum_bytes = _read_required(bundle / "checksums.sha256")
     try:
         checksum_text = checksum_bytes.decode("ascii")
     except UnicodeDecodeError as exc:
@@ -123,7 +138,7 @@ def _read_bundle(
     manifest, manifest_raw = _read_json(bundle / "manifest.json", "manifest")
     report, report_raw = _read_json(bundle / "report.json", "report")
     _validate_shape(report, manifest)
-    report_md = (bundle / "report.md").read_bytes()
+    report_md = _read_required(bundle / "report.md")
     expected_payloads = {
         "manifest.json": manifest_raw,
         "report.json": report_raw,

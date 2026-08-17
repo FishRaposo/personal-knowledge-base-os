@@ -243,6 +243,40 @@ def test_verifier_cli_reports_schema_failure_without_a_traceback(bundle: Path) -
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.parametrize("member", sorted(portfolio_demo.BUNDLE_FILES))
+def test_verifier_rejects_non_file_bundle_members_cleanly(
+    bundle: Path, member: str
+) -> None:
+    path = bundle / member
+    path.unlink()
+    path.mkdir()
+
+    with pytest.raises(
+        verify_portfolio_evidence.EvidenceVerificationError,
+        match="not a regular file",
+    ):
+        verify_portfolio_evidence.verify_bundle(bundle)
+
+
+def test_verifier_cli_reports_non_file_member_without_a_traceback(bundle: Path) -> None:
+    manifest = bundle / "manifest.json"
+    manifest.unlink()
+    manifest.mkdir()
+
+    result = subprocess.run(
+        [sys.executable, "scripts/verify_portfolio_evidence.py", str(bundle)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "not a regular file" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_verifier_rejects_self_consistent_semantic_tampering(
     bundle: Path, tmp_path: Path
 ) -> None:
