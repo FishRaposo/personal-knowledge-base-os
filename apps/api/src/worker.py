@@ -1,6 +1,6 @@
 """Celery worker with real knowledge-base tasks.
 
-Built on ``shared_core.tasks.create_celery_app``. The module imports with NO
+Built on internal ``vendor_core.tasks.create_celery_app``. The module imports with NO
 broker running (Celery only connects when a worker starts or ``.delay()`` is
 called), so the API and tests import it freely. The pure logic lives in
 ``_index_vault`` / ``_reindex`` so it is unit-testable without invoking Celery.

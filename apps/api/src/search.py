@@ -2,7 +2,7 @@
 
 ``keyword_search`` is a transparent, explainable lexical scorer (exact/partial
 title, content frequency, tag hits). ``semantic_search`` runs real vector
-retrieval over ``shared_core.vectorstore`` (``InMemoryVectorStore`` offline,
+retrieval over internal ``vendor_core.vectorstore`` (``InMemoryVectorStore`` offline,
 ``PgVectorStore`` when a database is configured) using the chunk embeddings the
 indexer produced — chunk hits are rolled up to their parent note, keeping the
 best-scoring chunk as the matched snippet.

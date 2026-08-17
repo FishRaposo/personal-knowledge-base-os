@@ -2,9 +2,9 @@
 
 Single source of truth for per-model token costs across the workspace. Reconciles
 the previously divergent tables (agenttrace per-1K, knowledgeops per-token, and the
-legacy ``shared_core.llm.MODEL_COSTS`` per-1M) into one per-1M registry, and supports
+historical upstream ``llm.MODEL_COSTS`` per-1M) into one per-1M registry, and supports
 an external JSON/YAML override file so deployments can adjust prices without code
-changes. ``shared_core.llm.estimate_llm_cost`` delegates here.
+changes. The vendored ``llm.estimate_llm_cost`` delegates here.
 """
 
 import json
@@ -23,7 +23,7 @@ class PriceEntry(BaseModel):
 
 
 # Default per-1M-token pricing (USD). Values for gpt-4o, gpt-4o-mini,
-# claude-3-5-sonnet and claude-3-haiku match the legacy shared_core.llm.MODEL_COSTS
+# claude-3-5-sonnet and claude-3-haiku match the historical upstream cost table
 # table so existing estimate_llm_cost() callers are unaffected.
 MODEL_PRICING: dict[str, PriceEntry] = {
     "gpt-4o": PriceEntry(input_per_1m=5.0, output_per_1m=15.0),

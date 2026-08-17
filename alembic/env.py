@@ -1,19 +1,11 @@
-import sys
 from logging.config import fileConfig
-from pathlib import Path
 
 from sqlalchemy import create_engine
 
 from alembic import context
+from apps.api.src.config import AppConfig
 from apps.api.src.internal.vendor_core.database import Base
-
-# The Python package root for this project is apps/api/src (loose modules), so we
-# import models the same way the app does: rooted at that directory.
-SRC_ROOT = Path(__file__).resolve().parent.parent / "apps" / "api" / "src"
-sys.path.insert(0, str(SRC_ROOT))
-
-from config import AppConfig  # noqa: E402
-from models import Note, NoteChunk  # noqa: E402,F401
+from apps.api.src.models import Note, NoteChunk  # noqa: F401
 
 config = context.config
 

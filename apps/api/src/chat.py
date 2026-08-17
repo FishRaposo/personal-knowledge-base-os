@@ -3,10 +3,10 @@
 Offline-first / real-when-keyed, mirroring ``llm-cost-latency-monitor``'s SDK: by
 default a deterministic *simulated* answer is composed from the retrieved chunks
 (no network, no key); when an OpenAI/Anthropic key is configured the real
-provider is called via ``shared_core.llm.LLMClientFactory``, falling back to the
-simulation if the SDK is missing or the call fails. Every answer carries inline
-``[n]`` citation markers, and the citation grounding is *scored* with
-``shared_core.evaljudge.CitationJudge`` so we can assert the answer is grounded.
+provider is called via the internal ``vendor_core.llm.LLMClientFactory``, falling
+back to the simulation if the SDK is missing or the call fails. Every answer
+carries inline ``[n]`` citation markers, and the citation grounding is *scored*
+with internal ``vendor_core.evaljudge.CitationJudge`` so grounding is explicit.
 """
 
 import asyncio
@@ -55,7 +55,7 @@ def _simulated_answer(query: str, citations: List[Dict]) -> str:
 
 
 def _call_llm(prompt: str, *, model: str, api_keys: Dict[str, Optional[str]]) -> str:
-    """Invoke the real LLM via shared_core. Raises on missing SDK / key."""
+    """Invoke the real LLM via the internal vendor adapter."""
     from .internal.vendor_core.llm import LLMClientFactory
 
     factory = LLMClientFactory(

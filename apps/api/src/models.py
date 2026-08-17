@@ -3,9 +3,9 @@
 Two tables: ``notes`` (one row per markdown note, with links/tags/metadata as
 JSON) and ``note_chunks`` (the embeddable slices, embeddings stored as JSON so
 the schema stays SQLite-compatible for the offline in-memory fallback). The
-*vector search* path lives in ``shared_core.vectorstore`` (in-memory by default,
-pgvector when a database is configured), so this relational store does not need a
-native vector column to function.
+*vector search* path lives in internal ``vendor_core.vectorstore`` (in-memory by
+default, pgvector when a database is configured), so this relational store does
+not need a native vector column to function.
 """
 
 from sqlalchemy import JSON, Column, ForeignKey, Integer, String, Text

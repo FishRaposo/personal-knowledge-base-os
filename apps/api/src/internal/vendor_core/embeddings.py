@@ -2,7 +2,7 @@
 
 An ``EmbeddingProvider`` ABC + factory, an OpenAI provider and a deterministic
 offline hash fallback (so demos/tests run with no API key), a gateway client built
-on ``shared_core.clients.BaseHTTPClient``, an LRU content-hash cache, and the pure
+on the historical upstream HTTP-client contract, an LRU content-hash cache, and the pure
 similarity ladder (cosine, tf cosine, jaccard). Heavy deps (numpy,
 sentence-transformers) are optional and dynamically imported.
 """

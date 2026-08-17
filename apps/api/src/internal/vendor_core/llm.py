@@ -16,9 +16,9 @@ MODEL_COSTS = {
 def estimate_llm_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     """Helper to calculate LLM completion USD cost.
 
-    Delegates to :mod:`shared_core.pricing`, the single source of truth for
+    Delegates to the vendored :mod:`vendor_core.pricing`, the local source of truth for
     per-model token pricing. ``MODEL_COSTS`` above is retained for backward
-    compatibility; new code should prefer ``shared_core.pricing``.
+    compatibility; new code should prefer ``vendor_core.pricing``.
     """
     from .pricing import calculate_cost
 

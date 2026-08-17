@@ -1,6 +1,6 @@
 """Markdown vault ingestion: parse, chunk, and extract links/tags/metadata.
 
-Built on ``shared_core.docparse`` for parsing (``MarkdownParser``) and semantic
+Built on internal ``vendor_core.docparse`` for parsing (``MarkdownParser``) and semantic
 chunking (``chunk_text``). On top of the shared pipeline this module adds the
 knowledge-base-specific signals: ``[[wikilink]]`` extraction, ``#hashtag`` and
 YAML-frontmatter ``tags``, and a stable content hash per note. The output is a

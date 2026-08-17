@@ -1,6 +1,6 @@
 """Embedding generation for the knowledge base.
 
-Wraps ``shared_core.embeddings`` so the same code path runs offline (a
+Wraps internal ``vendor_core.embeddings`` so the same code path runs offline (a
 deterministic ``HashFallbackProvider`` — no API key, no network, no torch) and
 real-when-keyed (the OpenAI provider when ``OPENAI_API_KEY`` is configured). The
 synchronous wrappers here let the (sync) FastAPI endpoints and the indexer embed
@@ -18,7 +18,7 @@ from .internal.vendor_core.embeddings import (
 
 
 class EmbeddingGenerator:
-    """Synchronous facade over a ``shared_core`` embedding provider.
+    """Synchronous facade over an internal vendored embedding provider.
 
     Offline-first: defaults to the deterministic hash-fallback provider so tests
     and the demo run with no API key. Pass ``offline=False`` with an ``api_key``

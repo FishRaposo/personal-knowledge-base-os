@@ -3,7 +3,7 @@
 Both implement the same ``NoteStore`` surface so the API and worker swap backends
 without code changes. ``InMemoryNoteStore`` keeps everything in dicts (tests + the
 offline demo). ``DatabaseNoteStore`` upserts notes/chunks into PostgreSQL via a
-``shared_core`` session factory so the index survives restarts.
+internal vendored session factory so the index survives restarts.
 """
 
 from typing import Callable, Dict, List, Optional
@@ -68,7 +68,7 @@ class InMemoryNoteStore(NoteStore):
 
 
 class DatabaseNoteStore(NoteStore):
-    """PostgreSQL-backed note store using a ``shared_core`` session factory."""
+    """PostgreSQL-backed note store using the internal session factory."""
 
     def __init__(self, session_factory: Callable):
         # ``session_factory`` is ``DatabaseManager.get_session`` (a generator fn).

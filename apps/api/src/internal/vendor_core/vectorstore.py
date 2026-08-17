@@ -1,8 +1,9 @@
 """Vector store abstraction: in-memory (offline default) + pgvector (when a DB is set).
 
-Built on ``shared_core.embeddings`` for the similarity math. The in-memory store makes
-RAG-style retrieval fully testable with no database; ``PgVectorStore`` persists vectors
-in PostgreSQL via the pgvector extension. Both implement the ``VectorStore`` interface,
+Built on vendored ``vendor_core.embeddings`` for the similarity math. The
+in-memory store makes RAG-style retrieval fully testable with no database;
+``PgVectorStore`` persists vectors in PostgreSQL via the pgvector extension.
+Both implement the ``VectorStore`` interface,
 so consumers (rag-evaluation-lab, document-intelligence-pipeline, personal-knowledge-
 base-os, groundtruth, knowledgeops) swap offline/production without code changes.
 """

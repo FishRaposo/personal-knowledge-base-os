@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import runpy
 import subprocess
 import sys
@@ -100,6 +101,44 @@ def test_wheel_contents_checker_covers_the_vendor_namespace() -> None:
 
     assert "apps/api/src/internal/vendor_core/config.py" in required
     assert "apps/api/src/internal/vendor_core/vectorstore.py" in required
+    assert callable(namespace["verify_isolated_install"])
+    isolated_imports = set(namespace["ISOLATED_IMPORTS"])
+    assert "apps.api.src.main" in isolated_imports
+    assert "apps.api.src.worker" in isolated_imports
+    assert "apps.api.src.internal.vendor_core.evaljudge" in isolated_imports
+
+
+def test_runtime_docstrings_use_the_owned_vendor_name() -> None:
+    """Runtime guidance must not describe the archived import namespace as live."""
+
+    stale_name = "shared" + "_core"
+    violations: list[str] = []
+    for candidate in (ROOT / "apps" / "api" / "src").rglob("*.py"):
+        text = candidate.read_text(encoding="utf-8")
+        if stale_name in text:
+            violations.append(str(candidate.relative_to(ROOT)))
+
+    assert violations == []
+
+
+def test_alembic_upgrade_uses_installed_package_imports(tmp_path: Path) -> None:
+    """Migrations must import the same package namespace as the application."""
+
+    database = tmp_path / "migration.db"
+    env = dict(os.environ)
+    env["DATABASE_URL"] = f"sqlite:///{database.as_posix()}"
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert database.exists()
 
 
 def test_worker_and_api_import_without_redis_or_celery() -> None:
