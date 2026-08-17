@@ -17,7 +17,7 @@ import TagPill from "@/components/TagPill";
 import DemoBadge from "@/components/DemoBadge";
 import { ErrorState, Spinner } from "@/components/States";
 import NoteEditor from "@/components/NoteEditor";
-import { selectedVault } from "@/components/VaultPicker";
+import { useActiveVault } from "@/components/VaultPicker";
 
 export default function NoteView({ id }: { id: string }) {
   const [note, setNote] = useState<Note | null>(null);
@@ -25,13 +25,14 @@ export default function NoteView({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [demo, setDemo] = useState(false);
+  const vaultId = useActiveVault();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     setNotFound(false);
     try {
-      const { data, source } = await api.getNote(id, selectedVault());
+      const { data, source } = await api.getNote(id, vaultId);
       setNote(data);
       setDemo(source === "demo");
     } catch (err) {
@@ -43,7 +44,7 @@ export default function NoteView({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, vaultId]);
 
   useEffect(() => {
     load();

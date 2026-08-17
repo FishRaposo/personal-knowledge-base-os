@@ -7,7 +7,7 @@ import type { ChatResponse } from "@/types";
 import CitationCard from "@/components/CitationCard";
 import DemoBadge, { DemoWriteNotice } from "@/components/DemoBadge";
 import { ErrorState } from "@/components/States";
-import { selectedVault } from "@/components/VaultPicker";
+import { useActiveVault } from "@/components/VaultPicker";
 
 interface Turn {
   id: number;
@@ -30,6 +30,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const vaultId = useActiveVault();
   const endRef = useRef<HTMLDivElement>(null);
 
   async function ask(question: string) {
@@ -47,7 +48,7 @@ export default function ChatPage() {
     );
 
     try {
-      const { data, source } = await api.chat({ query: q, limit: 3, vaultId: selectedVault() });
+      const { data, source } = await api.chat({ query: q, limit: 3, vaultId });
       setTurns((t) =>
         t.map((turn) =>
           turn.id === id

@@ -50,7 +50,7 @@ export default function SearchPage() {
   useEffect(() => {
     if (submitted) runSearch(submitted, mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, vaultId]);
 
   return (
     <div className="mx-auto max-w-3xl">

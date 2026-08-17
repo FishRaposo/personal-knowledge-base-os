@@ -11,8 +11,10 @@ export default function LiveVaultStatus() {
   const [running, setRunning] = useState(false);
   const [lastEvent, setLastEvent] = useState<LiveEvent | null>(null);
   const [fallback, setFallback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLastEvent(null); setFallback(false); setError(null);
     api.getWatcher(vaultId).then(({ data }) => setRunning(data.running)).catch(() => undefined);
   }, [vaultId]);
 
@@ -42,8 +44,7 @@ export default function LiveVaultStatus() {
   }, [vaultId]);
 
   async function toggle() {
-    const { data } = await api.setWatcher(vaultId, !running);
-    setRunning(data.running);
+    try { const { data } = await api.setWatcher(vaultId, !running); setRunning(data.running); } catch (err) { setError((err as Error).message); }
   }
 
   return (
@@ -53,6 +54,7 @@ export default function LiveVaultStatus() {
       <button className="rounded border border-ink-200 px-2 py-1 hover:bg-ink-50" onClick={toggle}>{running ? "Stop" : "Start"} watcher</button>
       {lastEvent ? <span className="inline-flex items-center gap-1 text-brand-700"><Activity className="h-3.5 w-3.5" />{String(lastEvent.event).replace(/_/g, " ")}</span> : null}
       {fallback ? <span className="text-ink-400">Polling fallback</span> : <span className="text-green-700">Live SSE</span>}
+      {error ? <span role="alert" className="text-red-700">{error}</span> : null}
     </div>
   );
 }

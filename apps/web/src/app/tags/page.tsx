@@ -10,7 +10,7 @@ import type { TagRollup } from "@/types";
 import { titleOf } from "@/lib/mockData";
 import DemoBadge from "@/components/DemoBadge";
 import { EmptyState, ErrorState, Spinner } from "@/components/States";
-import { selectedVault } from "@/components/VaultPicker";
+import { useActiveVault } from "@/components/VaultPicker";
 
 function TagsView() {
   const params = useSearchParams();
@@ -20,12 +20,13 @@ function TagsView() {
   const [error, setError] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
   const [active, setActive] = useState<string | null>(initialTag);
+  const vaultId = useActiveVault();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, source } = await api.getTags(selectedVault());
+      const { data, source } = await api.getTags(vaultId);
       setTags(data.tags);
       setDemo(source === "demo");
     } catch (err) {
@@ -33,7 +34,7 @@ function TagsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [vaultId]);
 
   useEffect(() => {
     load();
