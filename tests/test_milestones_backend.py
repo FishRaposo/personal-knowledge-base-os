@@ -186,13 +186,22 @@ def test_unknown_vault_api_paths_return_controlled_not_found_envelopes():
     client = TestClient(main.app)
     requests = [
         client.get("/notes/search", params={"q": "x", "vault_id": "missing"}),
+        client.post("/notes/chat", json={"query": "x", "vault_id": "missing"}),
+        client.get("/notes/nope", params={"vault_id": "missing"}),
+        client.get("/notes/nope/backlinks", params={"vault_id": "missing"}),
         client.get("/graph", params={"vault_id": "missing"}),
+        client.get("/tags", params={"vault_id": "missing"}),
+        client.get("/stats", params={"vault_id": "missing"}),
         client.post("/watchers/missing/start"),
+        client.post("/watchers/missing/stop"),
         client.get("/saved-searches", params={"vault_id": "missing"}),
         client.post(
             "/saved-searches",
             json={"vault_id": "missing", "name": "X", "query": "x"},
         ),
+        client.get("/flashcards", params={"vault_id": "missing"}),
+        client.post("/flashcards/generate", json={"vault_id": "missing"}),
+        client.get("/events/replay", params={"vault_id": "missing"}),
     ]
 
     assert [response.status_code for response in requests] == [404] * len(requests)

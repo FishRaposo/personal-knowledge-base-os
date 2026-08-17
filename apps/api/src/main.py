@@ -238,6 +238,7 @@ def search_notes(
 @app.post("/notes/chat")
 def chat_with_notes(payload: ChatRequest):
     """Answer a question over the notes with grounded inline citations."""
+    _require_vault(payload.vault_id)
     return kb.chat(payload.query, limit=payload.limit, vault_id=payload.vault_id)
 
 
@@ -246,6 +247,7 @@ def chat_with_notes(payload: ChatRequest):
 # --------------------------------------------------------------------------- #
 @app.patch("/notes/{note_id}")
 def update_note(note_id: str, payload: NoteUpdateRequest):
+    _require_vault(payload.vault_id)
     try:
         note = kb.update_note(note_id, payload.content, vault_id=payload.vault_id)
     except KeyError as exc:
@@ -261,6 +263,7 @@ def update_note(note_id: str, payload: NoteUpdateRequest):
 @app.get("/notes/{note_id}")
 def get_note(note_id: str, vault_id: str = "default"):
     """Return a single note's content, links, tags, and metadata."""
+    _require_vault(vault_id)
     note = kb.get_note(note_id, vault_id=vault_id)
     if note is None:
         raise NotFoundError(f"Note '{note_id}' not found")
@@ -270,6 +273,7 @@ def get_note(note_id: str, vault_id: str = "default"):
 @app.get("/notes/{note_id}/backlinks")
 def note_backlinks(note_id: str, vault_id: str = "default"):
     """Return all notes that link to the specified note."""
+    _require_vault(vault_id)
     return {
         "note_id": note_id,
         "backlinks": kb.get_backlinks(note_id, vault_id=vault_id),
@@ -289,12 +293,14 @@ def get_graph(vault_id: str = "default"):
 @app.get("/tags")
 def get_tags(vault_id: str = "default"):
     """Return tag -> note-count rollup across the vault."""
+    _require_vault(vault_id)
     return {"tags": kb.list_tags(vault_id=vault_id)}
 
 
 @app.get("/stats")
 def get_stats(vault_id: str = "default"):
     """Return index statistics (note/chunk/tag counts)."""
+    _require_vault(vault_id)
     return kb.stats(vault_id=vault_id)
 
 
@@ -332,6 +338,7 @@ def delete_saved_search(search_id: str, vault_id: str = "default"):
 
 @app.post("/flashcards/generate")
 def generate_flashcards(payload: FlashcardGenerateRequest):
+    _require_vault(payload.vault_id)
     cards = kb.generate_flashcards(
         vault_id=payload.vault_id,
         note_id=payload.note_id,
@@ -346,12 +353,14 @@ def generate_flashcards(payload: FlashcardGenerateRequest):
 
 @app.get("/flashcards")
 def list_flashcards(vault_id: str = "default"):
+    _require_vault(vault_id)
     cards = kb.flashcards.list(vault_id=vault_id)
     return {"cards": cards, "total": len(cards)}
 
 
 @app.post("/flashcards/{card_id}/review")
 def review_flashcard(card_id: str, payload: FlashcardReviewRequest):
+    _require_vault(payload.vault_id)
     try:
         return kb.review_flashcard(
             card_id, rating=payload.rating, vault_id=payload.vault_id
@@ -385,6 +394,7 @@ def stop_watcher(vault_id: str):
 
 @app.get("/events/replay")
 def replay_events(vault_id: str = "default", last_event_id: Optional[str] = None):
+    _require_vault(vault_id)
     try:
         events = kb.events.replay(vault_id=vault_id, after_id=last_event_id)
     except ValueError as exc:
@@ -401,6 +411,7 @@ def stream_events(
     last_event_id: Optional[str] = None,
     last_event_header: Optional[str] = Header(default=None, alias="Last-Event-ID"),
 ):
+    _require_vault(vault_id)
     cursor = last_event_id or last_event_header
     try:
         kb.events.parse_cursor(cursor)
