@@ -101,13 +101,10 @@ The evidence bundle is generated under the ignored `artifacts/portfolio/personal
 For dashboard gates:
 
 ```bash
-npm ci
-npm test -- --run
-npx tsc --noEmit
-npm run build
 cd apps/web
 npm ci
 npm test -- --run
+npx tsc --noEmit
 npm run lint
 npm run build
 npx playwright install chromium
