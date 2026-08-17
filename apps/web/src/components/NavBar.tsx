@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, Search, Network, MessagesSquare, Tags } from "lucide-react";
+import { Brain, Search, Network, MessagesSquare, Tags, PanelsTopLeft } from "lucide-react";
 import clsx from "clsx";
+import VaultPicker from "@/components/VaultPicker";
 
 const LINKS = [
   { href: "/search", label: "Search", icon: Search },
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/chat", label: "Chat", icon: MessagesSquare },
   { href: "/tags", label: "Tags", icon: Tags },
+  { href: "/workspace", label: "Workspace", icon: PanelsTopLeft },
 ];
 
 export default function NavBar() {
@@ -26,6 +28,7 @@ export default function NavBar() {
           </span>
         </Link>
         <div className="flex items-center gap-1">
+          <VaultPicker />
           {LINKS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (

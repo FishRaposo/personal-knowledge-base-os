@@ -54,6 +54,8 @@ export interface GraphNode {
   tags: string[];
   out_degree: number;
   in_degree: number;
+  /** Additive metadata: unresolved wikilinks are never rendered as graph nodes. */
+  dangling_links?: string[];
 }
 
 export interface GraphEdge {
@@ -64,6 +66,63 @@ export interface GraphEdge {
 export interface GraphResponse {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface Vault {
+  id: string;
+  name: string;
+  path?: string;
+}
+
+export interface VaultsResponse {
+  vaults: Vault[];
+  selected?: string;
+}
+
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: string;
+  mode?: SearchMode;
+  tags?: string[];
+  vault_id: string;
+}
+
+export interface SavedSearchesResponse {
+  searches: SavedSearch[];
+}
+
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  note_id: string;
+  citations?: string[];
+  due_at?: string;
+  interval_days?: number;
+  vault_id: string;
+}
+
+export interface FlashcardsResponse {
+  flashcards: Flashcard[];
+}
+
+export interface WatcherStatus {
+  vault_id: string;
+  running: boolean;
+  backend?: "polling" | "watchdog" | string;
+}
+
+export interface LiveEvent {
+  id: string;
+  event:
+    | "index_started"
+    | "note_changed"
+    | "index_completed"
+    | "index_failed"
+    | "watcher_started"
+    | "watcher_stopped";
+  data: Record<string, unknown>;
 }
 
 export interface TagRollup {

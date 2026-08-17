@@ -87,4 +87,44 @@ describe("api client", () => {
     expect(source).toBe("demo");
     expect(data.citations.length).toBeGreaterThan(0);
   });
+
+  it("scopes new retrieval calls to the selected vault and tag without changing legacy search", async () => {
+    const response = {
+      query: "offline",
+      mode: "hybrid",
+      results: [],
+      total: 0,
+    };
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify(response), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.search("offline", "hybrid", 5, { vaultId: "work", tag: "ops" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("vault_id=work"),
+      expect.anything()
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("tag=ops"),
+      expect.anything()
+    );
+  });
+
+  it("keeps vault, note-edit, saved-search, and flashcard actions usable offline", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      })
+    );
+
+    await expect(api.getVaults()).resolves.toMatchObject({ source: "demo" });
+    await expect(
+      api.updateNote("wikilinks", { content: "# Wikilinks\nUpdated", vaultId: "default" })
+    ).resolves.toMatchObject({ source: "demo" });
+    await expect(api.getSavedSearches("default")).resolves.toMatchObject({ source: "demo" });
+    await expect(api.getFlashcards("default")).resolves.toMatchObject({ source: "demo" });
+  });
 });

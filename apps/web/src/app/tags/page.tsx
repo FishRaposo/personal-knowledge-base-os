@@ -10,6 +10,7 @@ import type { TagRollup } from "@/types";
 import { titleOf } from "@/lib/mockData";
 import DemoBadge from "@/components/DemoBadge";
 import { EmptyState, ErrorState, Spinner } from "@/components/States";
+import { selectedVault } from "@/components/VaultPicker";
 
 function TagsView() {
   const params = useSearchParams();
@@ -24,7 +25,7 @@ function TagsView() {
     setLoading(true);
     setError(null);
     try {
-      const { data, source } = await api.getTags();
+      const { data, source } = await api.getTags(selectedVault());
       setTags(data.tags);
       setDemo(source === "demo");
     } catch (err) {

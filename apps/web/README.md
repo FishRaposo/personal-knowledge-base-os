@@ -3,6 +3,9 @@
 The flagship front end for **personal-knowledge-base-os**: a local-first personal
 knowledge base over a vault of markdown notes. Search, browse, visualize, and chat
 with your notes — backed by wikilinks, a backlinks graph, and grounded citations.
+The dashboard is offline-first: the bundled demo fixtures cover every route when the
+API is unavailable, while optional live services add vault namespaces, indexing, and
+local review state.
 
 Built with **Next.js 14 (App Router)**, **React 18**, **TypeScript**,
 **Tailwind CSS**, **lucide-react**, **recharts**, **react-markdown**, and
@@ -18,16 +21,19 @@ Built with **Next.js 14 (App Router)**, **React 18**, **TypeScript**,
 | `/graph`       | Interactive force-directed graph of notes + wikilinks (`GET /graph`); click a node to inspect and open it. |
 | `/chat`        | Chat with citations (`POST /notes/chat`) — grounded answers with inline `[n]` source notes. |
 | `/tags`        | Tag browser (`GET /tags`) — a tag cloud with note counts; select a tag to list its notes. |
+| `/workspace`   | Vault status, saved searches, deterministic flashcards, and local review actions. |
 
 ### Endpoints consumed
 
 `GET /notes/search`, `GET /notes/{id}`, `GET /notes/{id}/backlinks`, `GET /graph`,
-`GET /tags`, `GET /stats`, `POST /notes/chat`.
+`GET /tags`, `GET /stats`, `POST /notes/chat`, plus additive `GET /vaults`,
+`PATCH /notes/{id}`, `GET /events`, watcher, saved-search, and flashcard routes.
+Every legacy request remains unchanged; `vault_id=default` is an additive namespace.
 
 ## Getting started
 
 ```bash
-npm install
+npm ci
 npm run dev        # http://localhost:3000
 ```
 
@@ -58,12 +64,23 @@ badge appears on the affected view.
 
 - Real HTTP **4xx/5xx** responses are **not masked** — they surface as true error
   states (e.g. opening a non-existent note shows a 404 "Note not found" view).
-- Write actions (chat) in demo mode show an explanatory
+- Write actions (chat, note editing, saved searches, and flashcard review) in demo
+  mode show the same safe local behavior but are not persisted outside the fixture.
+  Chat continues to show an explanatory
   **"Demo — not persisted"** notice.
 
 The fixtures live in `src/lib/mockData.ts` and re-implement the backend's
-keyword/semantic/hybrid ranking, graph, tags, backlinks, and simulated cited chat
-so demo mode stays self-consistent across pages.
+keyword/semantic/hybrid ranking, graph, tags, backlinks, saved searches, flashcards,
+and simulated cited chat so demo mode stays self-consistent across pages.
+
+## Live updates and vault safety
+
+The selected vault is persisted in the browser and defaults to `default`. The UI
+uses Server-Sent Events for watcher/index/editor state and transparently falls back
+to bounded polling if SSE cannot connect. Watchers are always explicitly started;
+opening the dashboard has no filesystem side effect. Editing sends only the note id,
+markdown content, and active vault to the API; vault-root containment and symlink
+refusal remain server-side security guarantees.
 
 ## Testing
 

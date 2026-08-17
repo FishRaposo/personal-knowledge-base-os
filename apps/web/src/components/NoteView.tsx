@@ -16,6 +16,8 @@ import NoteMarkdown from "@/components/NoteMarkdown";
 import TagPill from "@/components/TagPill";
 import DemoBadge from "@/components/DemoBadge";
 import { ErrorState, Spinner } from "@/components/States";
+import NoteEditor from "@/components/NoteEditor";
+import { selectedVault } from "@/components/VaultPicker";
 
 export default function NoteView({ id }: { id: string }) {
   const [note, setNote] = useState<Note | null>(null);
@@ -29,7 +31,7 @@ export default function NoteView({ id }: { id: string }) {
     setError(null);
     setNotFound(false);
     try {
-      const { data, source } = await api.getNote(id);
+      const { data, source } = await api.getNote(id, selectedVault());
       setNote(data);
       setDemo(source === "demo");
     } catch (err) {
@@ -109,6 +111,7 @@ export default function NoteView({ id }: { id: string }) {
               ) : null}
             </div>
           </header>
+          <NoteEditor note={note} onSaved={setNote} />
           <NoteMarkdown content={note.content} />
         </article>
 

@@ -8,6 +8,7 @@ import type { SearchMode, SearchResult } from "@/types";
 import SearchResultCard from "@/components/SearchResultCard";
 import DemoBadge from "@/components/DemoBadge";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/States";
+import { selectedVault } from "@/components/VaultPicker";
 
 const MODES: { value: SearchMode; label: string; hint: string }[] = [
   { value: "keyword", label: "Keyword", hint: "Exact lexical matches" },
@@ -25,6 +26,7 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [demo, setDemo] = useState(false);
   const [submitted, setSubmitted] = useState("");
+  const [tag, setTag] = useState("");
 
   const runSearch = useCallback(async (q: string, m: SearchMode) => {
     if (!q.trim()) return;
@@ -32,7 +34,7 @@ export default function SearchPage() {
     setError(null);
     setSubmitted(q);
     try {
-      const { data, source } = await api.search(q, m, 10);
+      const { data, source } = await api.search(q, m, 10, { vaultId: selectedVault(), tag: tag.trim() || undefined });
       setResults(data.results);
       setDemo(source === "demo");
     } catch (err) {
@@ -41,7 +43,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tag]);
 
   // Re-run when the mode changes after an initial search.
   useEffect(() => {
@@ -100,6 +102,10 @@ export default function SearchPage() {
             ))}
           </div>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-xs text-ink-500">
+          Tag filter
+          <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="e.g. infrastructure" className="rounded border border-ink-200 px-2 py-1 text-sm" aria-label="Tag filter" />
+        </label>
       </form>
 
       {!submitted ? (

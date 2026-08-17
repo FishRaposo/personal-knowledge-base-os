@@ -5,12 +5,16 @@
 
 import type {
   ChatResponse,
+  FlashcardsResponse,
   GraphResponse,
   Note,
+  SavedSearchesResponse,
   SearchMode,
   SearchResult,
   StatsResponse,
   TagRollup,
+  VaultsResponse,
+  WatcherStatus,
 } from "@/types";
 
 interface RawNote {
@@ -298,7 +302,57 @@ export function mockGraph(): GraphResponse {
   edges.sort((a, b) =>
     a.source === b.source ? a.target.localeCompare(b.target) : a.source.localeCompare(b.source)
   );
-  return { nodes, edges };
+  return {
+    nodes: nodes.map((node) =>
+      node.id === "getting_started"
+        ? { ...node, dangling_links: ["future_note"] }
+        : node
+    ),
+    edges,
+  };
+}
+
+export function mockVaults(): VaultsResponse {
+  return {
+    selected: "default",
+    vaults: [{ id: "default", name: "Demo vault", path: "demo_vault" }],
+  };
+}
+
+export function mockSavedSearches(): SavedSearchesResponse {
+  return {
+    searches: [
+      {
+        id: "demo-local-first",
+        name: "Local-first notes",
+        query: "local first",
+        mode: "hybrid",
+        tags: ["infrastructure"],
+        vault_id: "default",
+      },
+    ],
+  };
+}
+
+export function mockFlashcards(): FlashcardsResponse {
+  return {
+    flashcards: [
+      {
+        id: "demo-wikilinks",
+        front: "What connects notes in a markdown vault?",
+        back: "Obsidian-style [[wikilinks]] create a bidirectional backlinks graph.",
+        note_id: "wikilinks",
+        citations: ["wikilinks"],
+        due_at: "normalized",
+        interval_days: 1,
+        vault_id: "default",
+      },
+    ],
+  };
+}
+
+export function mockWatcherStatus(vaultId = "default"): WatcherStatus {
+  return { vault_id: vaultId, running: false, backend: "polling" };
 }
 
 // ---- Tags (GET /tags) ----

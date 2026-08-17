@@ -4,11 +4,16 @@ import type {
   ChatResponse,
   GraphResponse,
   Note,
+  FlashcardsResponse,
+  SavedSearch,
+  SavedSearchesResponse,
   SearchMode,
   SearchResponse,
   SourcedResult,
   StatsResponse,
   TagsResponse,
+  VaultsResponse,
+  WatcherStatus,
 } from "@/types";
 import {
   mockChat,
@@ -18,6 +23,10 @@ import {
   mockStats,
   mockTags,
   mockBacklinks,
+  mockFlashcards,
+  mockSavedSearches,
+  mockVaults,
+  mockWatcherStatus,
 } from "@/lib/mockData";
 
 export const API_BASE =
@@ -94,13 +103,16 @@ export const api = {
   async search(
     q: string,
     mode: SearchMode = "keyword",
-    limit = 10
+    limit = 10,
+    options: { vaultId?: string; tag?: string } = {}
   ): Promise<SourcedResult<SearchResponse>> {
     const params = new URLSearchParams({
       q,
       mode,
       limit: String(limit),
     });
+    if (options.vaultId) params.set("vault_id", options.vaultId);
+    if (options.tag) params.set("tag", options.tag);
     return liveOrDemo(
       () => rawRequest<SearchResponse>(`/notes/search?${params}`),
       () => {
@@ -110,9 +122,9 @@ export const api = {
     );
   },
 
-  async getNote(id: string): Promise<SourcedResult<Note>> {
+  async getNote(id: string, vaultId = "default"): Promise<SourcedResult<Note>> {
     return liveOrDemo(
-      () => rawRequest<Note>(`/notes/${encodeURIComponent(id)}`),
+      () => rawRequest<Note>(`/notes/${encodeURIComponent(id)}?vault_id=${encodeURIComponent(vaultId)}`),
       () => {
         const note = mockNote(id);
         if (!note) throw new ApiError(`Note '${id}' not found`, 404);
@@ -121,43 +133,115 @@ export const api = {
     );
   },
 
-  async getBacklinks(id: string): Promise<SourcedResult<BacklinksResponse>> {
+  async getVaults(): Promise<SourcedResult<VaultsResponse>> {
+    return liveOrDemo(() => rawRequest<VaultsResponse>("/vaults"), mockVaults);
+  },
+
+  async updateNote(
+    id: string,
+    input: { content: string; vaultId?: string }
+  ): Promise<SourcedResult<Note>> {
+    return liveOrDemo(
+      () =>
+        rawRequest<Note>(`/notes/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ content: input.content, vault_id: input.vaultId ?? "default" }),
+        }),
+      () => {
+        const note = mockNote(id);
+        if (!note) throw new ApiError(`Note '${id}' not found`, 404);
+        return { ...note, content: input.content };
+      }
+    );
+  },
+
+  async getSavedSearches(vaultId = "default"): Promise<SourcedResult<SavedSearchesResponse>> {
+    return liveOrDemo(
+      () => rawRequest<SavedSearchesResponse>(`/saved-searches?vault_id=${encodeURIComponent(vaultId)}`),
+      mockSavedSearches
+    );
+  },
+
+  async saveSearch(input: Omit<SavedSearch, "id">): Promise<SourcedResult<SavedSearch>> {
+    return liveOrDemo(
+      () => rawRequest<SavedSearch>("/saved-searches", { method: "POST", body: JSON.stringify(input) }),
+      () => ({ ...input, id: `demo-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` })
+    );
+  },
+
+  async getFlashcards(vaultId = "default"): Promise<SourcedResult<FlashcardsResponse>> {
+    return liveOrDemo(
+      () => rawRequest<FlashcardsResponse>(`/flashcards?vault_id=${encodeURIComponent(vaultId)}`),
+      mockFlashcards
+    );
+  },
+
+  async generateFlashcards(vaultId = "default", noteId?: string): Promise<SourcedResult<FlashcardsResponse>> {
+    return liveOrDemo(
+      () => rawRequest<FlashcardsResponse>("/flashcards/generate", { method: "POST", body: JSON.stringify({ vault_id: vaultId, note_id: noteId }) }),
+      mockFlashcards
+    );
+  },
+
+  async reviewFlashcard(id: string, vaultId = "default", rating = 3): Promise<SourcedResult<unknown>> {
+    return liveOrDemo(
+      () => rawRequest<unknown>(`/flashcards/${encodeURIComponent(id)}/review`, { method: "POST", body: JSON.stringify({ vault_id: vaultId, rating }) }),
+      () => ({ id, vault_id: vaultId, rating })
+    );
+  },
+
+  async getWatcher(vaultId = "default"): Promise<SourcedResult<WatcherStatus>> {
+    return liveOrDemo(
+      () => rawRequest<WatcherStatus>(`/watchers/${encodeURIComponent(vaultId)}/status`),
+      () => mockWatcherStatus(vaultId)
+    );
+  },
+
+  async setWatcher(vaultId = "default", running: boolean): Promise<SourcedResult<WatcherStatus>> {
+    const action = running ? "start" : "stop";
+    return liveOrDemo(
+      () => rawRequest<WatcherStatus>(`/watchers/${encodeURIComponent(vaultId)}/${action}`, { method: "POST" }),
+      () => ({ ...mockWatcherStatus(vaultId), running })
+    );
+  },
+
+  async getBacklinks(id: string, vaultId = "default"): Promise<SourcedResult<BacklinksResponse>> {
     return liveOrDemo(
       () =>
         rawRequest<BacklinksResponse>(
-          `/notes/${encodeURIComponent(id)}/backlinks`
+          `/notes/${encodeURIComponent(id)}/backlinks?vault_id=${encodeURIComponent(vaultId)}`
         ),
       () => ({ note_id: id, backlinks: mockBacklinks(id) })
     );
   },
 
-  async getGraph(): Promise<SourcedResult<GraphResponse>> {
+  async getGraph(vaultId = "default"): Promise<SourcedResult<GraphResponse>> {
     return liveOrDemo(
-      () => rawRequest<GraphResponse>(`/graph`),
+      () => rawRequest<GraphResponse>(`/graph?vault_id=${encodeURIComponent(vaultId)}`),
       () => mockGraph()
     );
   },
 
-  async getTags(): Promise<SourcedResult<TagsResponse>> {
+  async getTags(vaultId = "default"): Promise<SourcedResult<TagsResponse>> {
     return liveOrDemo(
-      () => rawRequest<TagsResponse>(`/tags`),
+      () => rawRequest<TagsResponse>(`/tags?vault_id=${encodeURIComponent(vaultId)}`),
       () => ({ tags: mockTags() })
     );
   },
 
-  async getStats(): Promise<SourcedResult<StatsResponse>> {
+  async getStats(vaultId = "default"): Promise<SourcedResult<StatsResponse>> {
     return liveOrDemo(
-      () => rawRequest<StatsResponse>(`/stats`),
+      () => rawRequest<StatsResponse>(`/stats?vault_id=${encodeURIComponent(vaultId)}`),
       () => mockStats()
     );
   },
 
-  async chat(req: ChatRequest): Promise<SourcedResult<ChatResponse>> {
+  async chat(req: ChatRequest & { vaultId?: string }): Promise<SourcedResult<ChatResponse>> {
     return liveOrDemo(
       () =>
         rawRequest<ChatResponse>(`/notes/chat`, {
           method: "POST",
-          body: JSON.stringify({ query: req.query, limit: req.limit ?? 3 }),
+          body: JSON.stringify({ query: req.query, limit: req.limit ?? 3, vault_id: req.vaultId ?? "default" }),
         }),
       () => mockChat(req.query, req.limit ?? 3)
     );

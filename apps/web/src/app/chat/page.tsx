@@ -7,6 +7,7 @@ import type { ChatResponse } from "@/types";
 import CitationCard from "@/components/CitationCard";
 import DemoBadge, { DemoWriteNotice } from "@/components/DemoBadge";
 import { ErrorState } from "@/components/States";
+import { selectedVault } from "@/components/VaultPicker";
 
 interface Turn {
   id: number;
@@ -46,7 +47,7 @@ export default function ChatPage() {
     );
 
     try {
-      const { data, source } = await api.chat({ query: q, limit: 3 });
+      const { data, source } = await api.chat({ query: q, limit: 3, vaultId: selectedVault() });
       setTurns((t) =>
         t.map((turn) =>
           turn.id === id

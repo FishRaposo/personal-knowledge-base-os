@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Network, ArrowUpRight, Link2, CornerUpLeft, X } from "lucide-react";
+import { Network, ArrowUpRight, Link2, CornerUpLeft, X, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
 import type { GraphResponse } from "@/types";
 import GraphCanvas from "@/components/GraphCanvas";
 import DemoBadge from "@/components/DemoBadge";
 import TagPill from "@/components/TagPill";
 import { EmptyState, ErrorState, Spinner } from "@/components/States";
+import { selectedVault } from "@/components/VaultPicker";
 
 export default function GraphPage() {
   const [graph, setGraph] = useState<GraphResponse | null>(null);
@@ -21,7 +22,7 @@ export default function GraphPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data, source } = await api.getGraph();
+      const { data, source } = await api.getGraph(selectedVault());
       setGraph(data);
       setDemo(source === "demo");
     } catch (err) {
@@ -171,6 +172,13 @@ export default function GraphPage() {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                ) : null}
+
+                {(selected.dangling_links?.length ?? 0) > 0 ? (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5" data-testid="dangling-links">
+                    <h3 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800"><AlertTriangle className="h-3 w-3" /> Unresolved links</h3>
+                    <p className="mt-1 text-xs text-amber-700">{selected.dangling_links?.join(", ")}</p>
                   </div>
                 ) : null}
 
