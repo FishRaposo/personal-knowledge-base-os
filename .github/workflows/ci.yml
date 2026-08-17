@@ -5,9 +5,16 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_playwright:
+        description: Run the Chromium smoke test (downloads a browser runtime)
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  build-and-test:
+  python:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +31,9 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install -e ".[dev]"
 
+    - name: Scan forbidden dependencies and secrets
+      run: python scripts/check_forbidden_dependencies.py
+
     - name: Lint with Ruff
       run: python -m ruff check apps/api/src tests examples scripts alembic
 
@@ -36,7 +46,88 @@ jobs:
     - name: Type check
       run: python -m pyright apps/api/src
 
+    - name: Verify SQLite migrations
+      env:
+        DATABASE_URL: sqlite:///${{ runner.temp }}/pkb-ci.db
+      run: python -m alembic upgrade head
+
+    - name: Generate and verify deterministic evidence
+      run: |
+        python scripts/portfolio_demo.py
+        python scripts/verify_portfolio_evidence.py
+
     - name: Build and inspect wheel
       run: |
         python -m build
         python scripts/check_wheel_contents.py
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: npm
+        cache-dependency-path: apps/web/package-lock.json
+
+    - name: Install locked frontend dependencies
+      run: npm ci
+
+    - name: Run frontend unit tests
+      run: npm test -- --run
+
+    - name: Type check frontend
+      run: npm exec tsc -- --noEmit
+
+    - name: Lint frontend
+      run: npm run lint
+
+    - name: Build frontend
+      run: npm run build
+
+  playwright:
+    if: inputs.run_playwright
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: npm
+        cache-dependency-path: apps/web/package-lock.json
+
+    - name: Install locked frontend dependencies
+      run: npm ci
+
+    - name: Install Chromium runtime
+      run: npx playwright install --with-deps chromium
+
+    - name: Run Chromium smoke test
+      run: npm run test:e2e -- --project=chromium
+
+  containers:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate Compose configuration
+      run: docker compose config
+
+    - name: Build repository-local web image
+      run: |
+        docker compose build web
+        docker build --target runner --tag pkb-web:ci apps/web

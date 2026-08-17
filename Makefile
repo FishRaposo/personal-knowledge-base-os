@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck docker-up docker-down demo evidence migrate clean
+.PHONY: install dev test lint format format-check typecheck forbidden docker-check docker-up docker-down demo evidence migrate release-check clean
 
 install:
 	python -m pip install -e ".[dev]"
@@ -13,13 +13,23 @@ test:
 	pytest
 
 lint:
-	ruff check .
+	python -m ruff check apps/api/src tests examples scripts alembic
 
 format:
-	ruff format .
+	python -m ruff format apps/api/src tests examples scripts alembic
+
+format-check:
+	python -m ruff format --check apps/api/src tests examples scripts alembic
 
 typecheck:
-	pyright apps/api/src/
+	python -m pyright apps/api/src
+
+forbidden:
+	python scripts/check_forbidden_dependencies.py
+
+docker-check:
+	docker compose config
+	docker compose build web
 
 docker-up:
 	docker compose up -d
@@ -33,6 +43,8 @@ demo:
 evidence:
 	python scripts/portfolio_demo.py
 	python scripts/verify_portfolio_evidence.py
+
+release-check: forbidden lint format-check typecheck test migrate evidence
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
