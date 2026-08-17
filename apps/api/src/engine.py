@@ -218,11 +218,14 @@ class KnowledgeBase:
             )
             return result
         except Exception as exc:
-            self.events.publish(
+            failure_event = self.events.publish(
                 "index_failed",
                 vault_id=vault_id,
                 data={"error": type(exc).__name__},
             )
+            # The watcher uses this exact event id to avoid duplicating only the
+            # failure emitted for this attempt (not stale/concurrent failures).
+            vars(exc)["_pkb_index_failed_event_id"] = failure_event["id"]
             raise
 
     def index_notes(self, notes: List[Dict], *, vault_id: str = "default") -> Dict:

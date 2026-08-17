@@ -71,7 +71,7 @@ def test_incremental_index_detects_add_change_and_delete(tmp_path):
     first = kb.index_vault(str(vault), vault_id="v", incremental=True)
     assert first["changes"] == {"added": ["a"], "changed": [], "deleted": []}
 
-    _write(vault, "a.md", "# A\ntwo")
+    _write(vault, "a.md", "# A\ntwo with a different size")
     _write(vault, "b.md", "# B\nnew")
     second = kb.index_vault(str(vault), vault_id="v", incremental=True)
     assert second["changes"] == {
@@ -387,6 +387,67 @@ def test_watcher_does_not_duplicate_engine_index_failure(tmp_path):
 
     assert event_types.count("index_failed") == 1
     assert event_types[-1] == "watcher_stopped"
+
+
+def test_watcher_does_not_treat_stale_failure_as_current_attempt(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    bus = EventBus()
+    bus.publish("index_failed", vault_id="v", data={"error": "OldFailure"})
+    watcher = PollingVaultWatcher(
+        vault_id="v", root=vault, event_bus=bus, on_change=lambda: None
+    )
+    watcher.running = True
+    calls = 0
+
+    def wait_once(_timeout):
+        nonlocal calls
+        calls += 1
+        return calls > 1
+
+    watcher._stop.wait = wait_once
+    watcher.poll_once = lambda: (_ for _ in ()).throw(RuntimeError("current"))
+    watcher._run()
+
+    failures = [
+        event for event in bus.replay(vault_id="v") if event["type"] == "index_failed"
+    ]
+    assert [event["data"]["error"] for event in failures] == [
+        "OldFailure",
+        "RuntimeError",
+    ]
+
+
+def test_watcher_does_not_claim_concurrent_failure_for_current_attempt(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    bus = EventBus()
+    watcher = PollingVaultWatcher(
+        vault_id="v", root=vault, event_bus=bus, on_change=lambda: None
+    )
+    watcher.running = True
+    calls = 0
+
+    def wait_once(_timeout):
+        nonlocal calls
+        calls += 1
+        return calls > 1
+
+    def concurrent_then_fail():
+        bus.publish("index_failed", vault_id="v", data={"error": "Concurrent"})
+        raise RuntimeError("current")
+
+    watcher._stop.wait = wait_once
+    watcher.poll_once = concurrent_then_fail
+    watcher._run()
+
+    failures = [
+        event for event in bus.replay(vault_id="v") if event["type"] == "index_failed"
+    ]
+    assert [event["data"]["error"] for event in failures] == [
+        "Concurrent",
+        "RuntimeError",
+    ]
 
 
 def test_get_index_maps_validation_errors_like_post(tmp_path):

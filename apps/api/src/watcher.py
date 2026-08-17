@@ -88,11 +88,20 @@ class PollingVaultWatcher:
 
     def _run(self) -> None:
         while not self._stop.wait(self.interval_seconds):
+            existing = self.event_bus.replay(vault_id=self.vault_id)
+            cursor = existing[-1]["id"] if existing else None
             try:
                 self.poll_once()
             except Exception as exc:  # noqa: BLE001 - terminate truthfully on failure
-                recent = self.event_bus.replay(vault_id=self.vault_id)
-                if not recent or recent[-1]["type"] != "index_failed":
+                emitted_id = getattr(exc, "_pkb_index_failed_event_id", None)
+                attempt_events = self.event_bus.replay(
+                    vault_id=self.vault_id, after_id=cursor
+                )
+                engine_emitted = bool(emitted_id) and any(
+                    event["id"] == str(emitted_id) and event["type"] == "index_failed"
+                    for event in attempt_events
+                )
+                if not engine_emitted:
                     self.event_bus.publish(
                         "index_failed",
                         vault_id=self.vault_id,
