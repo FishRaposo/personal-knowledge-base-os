@@ -35,16 +35,20 @@ The reasoning behind the major technical choices in this service.
 
 ---
 
-## 3. Vendor the proven compatibility closure instead of restoring a sibling
+## 3. Internal vendor namespace, not sibling restoration
 
-- **Decision**: Use internal `vendor_core.docparse` for parsing/chunking,
+- **Decision**: Use the pinned internal `apps.api.src.internal.vendor_core` closure for parsing/chunking,
   `vendor_core.embeddings` for vectors, `vendor_core.vectorstore` for retrieval,
   and `vendor_core.evaljudge.CitationJudge` for grounding — rather than
   hand-rolling each.
-- **Rationale**: These are the convergence points across the portfolio; reusing
-  them keeps behavior consistent and battle-tested. The previous
-  `MockEmbeddingGenerator` was replaced with the shared provider, and golden tests
-  pin the output so a future swap can't silently drift the rankings.
+- **Rationale**: The vendor closure preserves the proven contracts without an
+  install-time sibling checkout, Git URL dependency, or external `shared_core`
+  import. It is pinned to `operator-shared-core` v1.3.0 at
+  `dbf276a7708da65b55e1f10b35af634b300d1f07`; provenance and namespace-only
+  patches are in `THIRD_PARTY_NOTICES.md`.
+- **Policy**: database, Redis, Celery, providers, watchdog, OCR, and heavy
+  parser/model capabilities are optional extras. The default `dev` path must
+  remain deterministic and offline-capable.
 
 ---
 
@@ -92,3 +96,38 @@ The reasoning behind the major technical choices in this service.
   service from a future Node/React frontend keeps environments modular. The API
   already exposes everything a dashboard needs (search, graph, chat, tags, stats)
   so the frontend is purely additive.
+
+---
+
+## 8. Additive vault namespaces and local state
+
+- **Decision**: Add `vault_id` to new and existing operations while preserving
+  `vault_id="default"` as the legacy namespace.
+- **Rationale**: A personal workspace can keep independent vaults without
+  changing existing API calls or mixing retrieval, graph, event, and review data.
+- **Boundary**: This is service-level local isolation, not authentication or
+  hosted tenancy. Persistent adapters may use composite vault predicates; the
+  in-memory path applies the same scope rules.
+
+---
+
+## 9. Polling watcher with SSE, not mandatory infrastructure
+
+- **Decision**: Use an explicitly started standard-library polling watcher and
+  bounded replayable SSE events. Watchdog can accelerate a deployment only when
+  installed.
+- **Rationale**: Polling works in the offline demo and avoids import-time side
+  effects. SSE supports a simple dashboard live-update channel; polling replay is
+  retained for clients that cannot hold an event stream.
+- **Boundary**: event IDs and replay are local runtime metadata, not a durable
+  distributed message bus or hosted collaboration promise.
+
+---
+
+## 10. Deterministic cards before optional enrichment
+
+- **Decision**: Generate stable, source-cited flashcards from headings and
+  paragraphs, then keep review scheduling locally. An optional provider can
+  enrich content but cannot be required for generation.
+- **Rationale**: Stable IDs, deterministic evidence, and review behavior are
+  more useful for an offline-first product than a provider-only card generator.

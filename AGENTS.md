@@ -19,7 +19,8 @@ Unlike standard workspace repos, this project uses a monorepo layout:
 - **Config**: `pyproject.toml` / `alembic.ini` live in the project root and point
   back at `apps/api/src`.
 - **Web frontend**: `apps/web/` is a built, tested Next.js 14 dashboard (search,
-  note viewer, force-directed graph, cited chat, tags) with its own
+  note viewer/editor, force-directed graph, cited chat, tags, vault workspace,
+  saved searches, flashcards, and watcher status) with its own
   `package.json`, Vitest component/page tests, and a Playwright smoke spec. It is
   a separate toolchain from the Python gate — see `apps/web/README.md`.
 
@@ -34,7 +35,7 @@ make test         # pytest
 make lint         # ruff check .
 make format       # ruff format .
 make typecheck    # pyright apps/api/src/
-make docker-up    # docker compose up -d  (Postgres + Redis)
+make docker-up    # optional: docker compose up -d  (Postgres + Redis)
 make demo         # python examples/run_demo.py
 alembic upgrade head   # apply DB migrations (only needed for persistence)
 ```
@@ -47,10 +48,12 @@ alembic upgrade head   # apply DB migrations (only needed for persistence)
 - **`embeddings.py`** — sync facade over internal vendored embeddings (offline/real).
 - **`search.py`** — keyword scorer + semantic vector retrieval.
 - **`chat.py`** — RAG answer (sim/real LLM) + `CitationJudge` grounding.
-- **`graph.py`** — backlinks adjacency + `{nodes, edges}` export.
+- **`graph.py`** — backlinks adjacency + `{nodes, edges}` export and dangling-link metadata.
 - **`store.py` / `models.py` / `db.py`** — persistence + DB-availability fallback.
 - **`worker.py`** — Celery tasks (`kb.index_vault`, `kb.reindex`).
 - **`config.py`** — `AppConfig` extending internal `vendor_core.config.BaseAppConfig`.
+- **`events.py` / `watcher.py`** — bounded replayable SSE events and explicit polling watchers.
+- **`flashcards.py`** — deterministic source-cited cards and local review scheduling.
 
 ## Internal compatibility layer
 
@@ -70,5 +73,7 @@ transitive pricing. The repository installs without a sibling package.
 - **`/health` is slow offline** (real socket connects); API tests patch
   `db_manager` / `redis_manager` and use a plain `TestClient` (no lifespan) to stay
   fast and in-memory.
-- **Input traversal**: `/notes/index` takes an arbitrary `path`. Sandbox hardening
-  is documented in `docs/security.md`; enforce it before untrusted exposure.
+- **Vault containment**: API indexing/editing accepts only the configured vault
+  root, rejects symlink components and path escapes, and bounds text edits to
+  2 MiB. `vault_id="default"` preserves legacy callers; watcher startup is always
+  explicit. These local safeguards are not a hosted auth or multi-user boundary.

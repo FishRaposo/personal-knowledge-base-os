@@ -1,72 +1,23 @@
 # Security — Personal Knowledge Base OS
 
-Trust boundaries, input validation, and secret handling for the service.
+## Filesystem trust boundary
 
----
+The index and edit surfaces operate only in configured vault roots. A non-default vault must be registered first; an explicit indexing path must equal that vault root. The service rejects path escapes and every existing symlink component before indexing or writing. It parses `.md` and `.markdown` files, keeps decoding failures controlled, and rejects null-containing or over-2 MiB note edits.
 
-## 1. Filesystem access (`/notes/index`)
+These are enforced local containment controls. They do not establish user identity, authorization, or a hosted multi-tenant boundary. Do not expose this API to untrusted networks without an authentication layer, least-privilege filesystem permissions, and appropriately restricted CORS/gateway policy.
 
-The most sensitive surface: `/notes/index` takes a directory `path` and reads
-files from it.
+## Content handling
 
-- **Current safeguards**:
-  - Only `.md` / `.markdown` files are opened; other files are skipped.
-  - Files are decoded with `errors="replace"`, so malformed content cannot crash
-    the process.
-  - A missing or empty vault returns a `400 VALIDATION_ERROR`, not a 500.
-- **Recommended hardening (before exposing to untrusted callers)**:
-  - Resolve the input to an absolute path (`os.path.abspath`) and verify it is
-    inside an allow-listed vault root.
-  - Reject any path containing `..` traversal sequences.
-  - Enforce a max file size (e.g. 5 MB) and a recursion-depth cap to bound memory.
-- **Deployment note**: Run the API process under a least-privilege user whose
-  filesystem permissions are limited to the vault directory.
+Markdown and frontmatter are data only. The indexer does not evaluate note content, execute shell commands, or load arbitrary code. Watchers use a standard-library polling loop; starting one is an explicit API action, never an application-start side effect.
 
----
+## Events and metadata
 
-## 2. No code execution from content
+SSE data is vault-scoped and bounded in memory. Event payloads use normalized metadata appropriate for dashboard state, not secrets or provider responses. A reconnect cursor may replay retained events; stale cursors must reload current state. Do not treat replay as an audit ledger.
 
-- The indexer performs read-only file operations. It never executes shell
-  commands, evaluates note content, or spawns subprocesses based on file names or
-  bodies.
-- Frontmatter is parsed with a minimal, dependency-free key/value reader — no
-  arbitrary YAML object construction.
+## Secrets and optional integrations
 
----
+Provider keys and service URLs are read through `apps.api.src.internal.vendor_core.config`; no key is committed or logged by default. OpenAI/Anthropic, PostgreSQL/pgvector, Redis, Celery, watchdog, and heavy parsing/model dependencies are optional extras. A missing provider must not turn the default demo into a network-backed flow.
 
-## 3. Secrets
+## Persistence and operations
 
-- API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) and the database/Redis URLs are
-  read from the environment / `.env` via the internal `vendor_core.config` (`SecretStr` for
-  keys). They are never hard-coded.
-- Secrets are unwrapped only at the call site that needs them (embeddings, LLM) and
-  are not logged. The default configuration uses no keys at all.
-
----
-
-## 4. Database & storage
-
-- The relational store holds note content and JSON embeddings. If a vault contains
-  private material, configure encryption-at-rest on the PostgreSQL volume.
-- The DB connection uses `pool_pre_ping` and bounded pool sizes from
-  the internal compatibility layer; credentials come from `DATABASE_URL`.
-
----
-
-## 5. Transport & API surface
-
-- The service emits structured logs with a per-request correlation id
-  (`RequestLoggingMiddleware`) for auditability.
-- Errors are returned as structured JSON via the shared error handler (no stack
-  traces leak to clients).
-- CORS and authentication are intentionally **not** configured for the local-first
-  default. Before any networked deployment, add an auth layer (the API is designed
-  to sit behind a gateway) and restrict CORS origins via `CORS_ALLOWED_ORIGINS`.
-
----
-
-## 6. Denial of service
-
-- Indexing is bounded by the `.md`-only filter today. For multi-tenant or public
-  exposure, move indexing to the Celery worker (job id returned immediately) and
-  add a local rate-limit adapter and the file-size/depth caps above.
+For private vaults, secure the host filesystem and configure encryption/backups appropriate to the selected database. The local in-memory fallback intentionally does not persist across restarts. Production deployment must independently verify database backup/recovery, provider credentials, transport security, rate limits, access control, and tenant isolation; none are claimed by the offline evidence bundle.

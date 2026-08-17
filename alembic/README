@@ -1,13 +1,12 @@
-Generic single-database configuration for personal-knowledge-base-os.
+# Migrations — Personal Knowledge Base OS
 
-The database URL is resolved at runtime from AppConfig.DATABASE_URL (env.py), so
-no connection string is hard-coded in alembic.ini.
+Alembic migrations are optional for the offline demo. They are required only when using a configured SQL persistence adapter.
 
-Common commands (run from the project root):
+```bash
+python -m alembic upgrade head
+python -m alembic downgrade -1
+```
 
-    alembic upgrade head        # apply migrations
-    alembic revision --autogenerate -m "message"
-    alembic downgrade -1        # roll back one revision
+`0001_initial_schema` creates the legacy notes and chunks tables. `0002_milestone_3_4_persistence` is additive: it creates vault metadata, backfills the legacy namespace as `default`, adds vault-scoped note/chunk predicates, snapshots, saved searches, flashcards, flashcard review state, watcher state, and replay-event metadata. It preserves existing data/migration lineage while making all new records vault-scoped.
 
-The service runs fully offline without migrations (in-memory note store fallback);
-migrations are only needed when persisting notes to PostgreSQL.
+SQLite is a supported migration/test target. PostgreSQL/pgvector is optional infrastructure and must be verified independently before production use. The in-memory fallback runs without migrations and intentionally does not promise restart persistence.

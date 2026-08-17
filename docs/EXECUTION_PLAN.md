@@ -1,88 +1,23 @@
-# Execution Plan — Personal Knowledge Base OS
+# Execution record — Personal Knowledge Base OS
 
-This document records how the MVP was taken from ~60-75% (real core logic, a demo,
-docs, some tests) to a fully implemented, tested, and documented state. It is the
-"what was actually executed" companion to `implementation_plan.md`.
+> Historical record, reconciled during the comprehensive finalization pass. It describes executed work and verification targets; the portfolio receipt is the authoritative gate ledger.
 
----
+## Historical baseline
 
-## Starting point
+The original implementation delivered local Markdown indexing, backlinks, keyword retrieval, cited chat scaffolding, an initial persistence layer, and a dashboard. Its old 100-test claim, external `shared_core` installation path, and unimplemented roadmap statements are historical snapshots, not current operating instructions.
 
-The repo already had: a regex wikilink indexer, an in-memory backlinks graph, a
-keyword scorer, a template chat function, a `MockEmbeddingGenerator`, a Celery
-scaffold, and 16 passing tests (indexer/graph + two API smoke tests). Search was
-keyword-only (`semantic_search` was a stub), there was no persistence, no Alembic,
-no embeddings beyond the mock, and the API exposed only index/search/chat/backlinks.
+## Finalization work executed
 
----
+- Replaced the archived sibling/Git dependency with a pinned internal compatibility closure at `apps/api/src/internal/vendor_core`, including provenance and MIT notice.
+- Preserved legacy API response shapes and default vault behavior while adding vault namespaces, path-safe editing, dangling graph metadata, tag-scoped retrieval, saved searches, content-hash incremental indexing, explicit watchers, replayable SSE, deterministic cards, and local reviews.
+- Added additive migration coverage for vault metadata, scoped notes/chunks, snapshots, saved searches, flashcards/reviews, watcher state, and event metadata.
+- Kept synchronous indexing, in-memory stores, deterministic embeddings/chat, and broker-free task imports as offline defaults; infrastructure/providers remain opt-in.
+- Added deterministic portfolio evidence generation and strict verification for ingestion, retrieval, chat, namespace isolation, edits, incremental changes, watcher/SSE replay, searches, cards, persistence fallback, and optional-provider behavior.
 
-## Work executed
+## Required verification
 
-### Retrieval & AI logic (stubs → real)
-- **Embeddings**: Replaced `MockEmbeddingGenerator` with `EmbeddingGenerator`, a
-  sync facade over internal `vendor_core.embeddings` — offline `HashFallbackProvider` by
-  default, OpenAI when `OPENAI_API_KEY` is set. No torch / sentence-transformers.
-- **Semantic search**: Implemented real vector retrieval over
-  internal `vendor_core.vectorstore` (`InMemoryVectorStore` offline, `PgVectorStore` when a
-  DB is configured). Chunk hits roll up to parent notes with the best snippet.
-  Added a `hybrid` mode merging keyword + semantic.
-- **Ingestion**: Rebuilt the indexer on internal `vendor_core.docparse` (`MarkdownParser` +
-  `chunk_text`). Added YAML frontmatter parsing, `#hashtag` + frontmatter tag
-  extraction, content hashing, recursive traversal, and per-note chunking — while
-  keeping wikilink extraction (now alias- and slug-aware).
-- **Chat with citations**: Real RAG — retrieve chunks, build a grounded prompt,
-  answer with a deterministic simulation offline or a real LLM via
-  internal `vendor_core.llm.LLMClientFactory` when keyed (with graceful fallback). Citation
-  grounding is *scored* with internal `vendor_core.evaljudge.CitationJudge`.
+Run the commands in the root README from a clean environment, then record their exact outcomes, test totals, evidence hash, wheel result, frontend result, and manual QA handoff in the finalization receipt. Do not replace these with historical counts or assertions from this document.
 
-### Persistence (new)
-- `models.py` (`Note`, `NoteChunk`), `store.py` (`InMemoryNoteStore` +
-  `DatabaseNoteStore`), and `db.py` (fast TCP probe + `SELECT 1`, in-memory
-  fallback) — DB persistence by default with graceful fallback so tests/demos need
-  no database.
-- `alembic/` + `alembic.ini` with an initial migration creating `notes` /
-  `note_chunks`; verified `upgrade head` / `downgrade base` on SQLite.
+## Non-goals retained
 
-### Orchestration, API & worker
-- `engine.py` — a `KnowledgeBase` engine shared by the API and worker.
-- Rounded out endpoints: `POST /notes/index`, `GET /notes/search`
-  (keyword/semantic/hybrid), `POST /notes/chat`, `GET /notes/{id}`,
-  `GET /notes/{id}/backlinks`, `GET /graph` (nodes+edges), `GET /tags`,
-  `GET /stats`, `GET /health`.
-- `worker.py` — real tasks (`kb.index_vault`, `kb.reindex`) via
-  internal `vendor_core.tasks.create_celery_app`, importable with no broker.
-
-### Tests & data
-- Test suite expanded from 16 → 100: embeddings, keyword + semantic search, graph
-  export, indexer/frontmatter/tags, chat citations, persistence (SQLite via
-  `MockDatabase`), engine end-to-end, worker, every API endpoint (success + error),
-  and golden/regression tests pinning embedding output, citation scores, and
-  semantic ranking.
-- Richer `demo_vault/` (10 interlinked notes with frontmatter, tags, aliases) and a
-  full end-to-end `examples/run_demo.py`.
-
-### Docs
-- Rewrote `architecture` (with Mermaid), `design-decisions`, `failure-modes`,
-  `roadmap`, `security`; added this `EXECUTION_PLAN.md`; updated `AGENTS.md` and the
-  README.
-
----
-
-## Verification (all green)
-
-| Check | Result |
-|-------|--------|
-| `ruff format` + `ruff check apps/api/src tests examples` | clean |
-| `pytest -q` | 100 passed |
-| `examples/run_demo.py` | exit 0 |
-| `alembic upgrade head` (sqlite) | creates `notes`, `note_chunks` |
-
----
-
-## Known gaps / out of scope
-
-- `/notes/index` runs synchronously in-process; the worker task exists but the
-  endpoint does not yet dispatch to it.
-- Path-sandbox hardening for `/notes/index` is documented but not enforced.
-- pgvector and real OpenAI/Anthropic paths are wired and unit-covered via the
-  offline equivalents, but not exercised against live infrastructure in CI.
+Hosted/team workflows, authentication, cloud storage, mandatory PostgreSQL/Redis/Celery, hosted scheduling, mandatory provider credentials, and external notifications remain deferred. The dashboard’s SSE stream is local live-update plumbing with polling fallback, not a hosted collaboration claim.

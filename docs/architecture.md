@@ -1,159 +1,68 @@
 # Architecture — Personal Knowledge Base OS
 
-This document describes the components, data flow, and persistence model of the
-Personal Knowledge Base OS API service.
+Personal Knowledge Base OS is a local-first Markdown knowledge-base service. The default path is synchronous, deterministic, in-memory, and credential-free; adapters for databases, brokers, providers, heavy parsers, and filesystem accelerators are optional.
 
----
+## Layers
 
-## 1. System overview
+| Layer | Responsibility | Offline default |
+| --- | --- | --- |
+| API | Legacy FastAPI routes plus additive vault, editing, watcher, events, saved-search, and flashcard routes. | In-process API with `vault_id="default"`. |
+| Engine | Coordinates indexing, stores, graph, retrieval, chat, event emission, and watcher lifecycle. | `KnowledgeBase` with process-local state. |
+| Indexer | Parses Markdown, extracts metadata/wikilinks/tags, chunks content, and hashes normalized content. | Standard-library filesystem handling and vendored deterministic parser. |
+| Retrieval | Keyword, semantic, and hybrid result assembly with citations. | Hash embeddings and in-memory vector store. |
+| Graph | Forward/reverse links and graph export. | `{nodes, edges}` plus additive dangling metadata. |
+| Local productivity | Safe edits, snapshots/incremental changes, saved searches, flashcards, review scheduling. | Deterministic IDs and process-local services. |
+| Live updates | Explicit polling watcher, bounded replay buffer, SSE serialization. | No watcher at startup; caller starts it. |
+| Persistence | Notes/chunks and additive scoped records. | In-memory/SQLite-compatible service checks. |
 
-The service turns a folder of markdown files (a "vault") into a queryable
-knowledge base. It is offline-first: it boots and serves with **no database, no
-API key, and no network**, and transparently upgrades to PostgreSQL + pgvector +
-real LLM/embedding providers when those are configured.
+## Namespace and containment model
 
-The pipeline has five layers:
+Every public operation accepts an additive `vault_id`; omitted values resolve to `default`, preserving pre-expansion callers. State is scoped by vault: notes, vectors, graph, tags, searches, cards, reviews, watcher handles, and events do not cross namespace boundaries.
 
-1. **Ingestion (`indexer.py`)** — parses markdown via internal `vendor_core.docparse`,
-   strips YAML frontmatter, extracts `[[wikilinks]]`, `#hashtags`, and metadata,
-   and chunks each note for embedding.
-2. **Embedding (`embeddings.py`)** — wraps internal `vendor_core.embeddings`: a
-   deterministic offline hash fallback by default, the real OpenAI endpoint when
-   `OPENAI_API_KEY` is set.
-3. **Retrieval (`search.py`)** — keyword scoring + semantic vector search over
-   internal `vendor_core.vectorstore` (in-memory offline, pgvector when keyed).
-4. **Graph (`graph.py`)** — bidirectional backlinks adjacency + a `{nodes, edges}`
-   export for a visualization UI.
-5. **Orchestration + API (`engine.py`, `main.py`)** — the `KnowledgeBase` engine
-   ties the layers together; FastAPI exposes them as REST endpoints.
+A vault must be explicitly registered before a non-default API indexing path is used. Indexing and editing retain the configured root, reject symlink components, resolve the target safely, and reject targets outside that root. The editor accepts text only and limits content to 2 MiB. These checks are service-level safeguards in every supported store mode; they do not imply user authentication or a hosted multi-tenant security boundary.
 
-Persistence (`db.py`, `store.py`, `models.py`) and the Celery worker (`worker.py`)
-sit alongside, both selecting their backend from the same DB-availability probe.
-
----
-
-## 2. Component diagram
-
-```mermaid
-graph TD
-    Client["Client / Dashboard"] --> API["FastAPI<br/>main.py"]
-    API --> Engine["KnowledgeBase<br/>engine.py"]
-
-    Engine --> Indexer["NotesIndexer<br/>indexer.py"]
-    Engine --> Embedder["EmbeddingGenerator<br/>embeddings.py"]
-    Engine --> Search["keyword / semantic search<br/>search.py"]
-    Engine --> Graph["BacklinksGraph<br/>graph.py"]
-    Engine --> Chat["chat_with_citations<br/>chat.py"]
-
-    Indexer -->|"docparse parse + chunk"| SC1["internal vendor_core.docparse"]
-    Embedder -->|"hash fallback / OpenAI"| SC2["internal vendor_core.embeddings"]
-    Search -->|"cosine query"| VS["internal vendor_core.vectorstore<br/>(InMemory | PgVector)"]
-    Chat -->|"sim / real LLM"| SC3["internal vendor_core.llm"]
-    Chat -->|"citation grounding"| SC4["internal vendor_core.evaljudge<br/>CitationJudge"]
-
-    Engine --> Store["NoteStore<br/>store.py"]
-    Store -->|"DB probe"| DB["db.py<br/>db_available?"]
-    DB -->|reachable| PG[("PostgreSQL")]
-    DB -->|offline| MEM["InMemoryNoteStore"]
-
-    Indexer -->|read .md| FS["Markdown Vault"]
-    API --> Worker["Celery worker<br/>worker.py"]
-```
-
----
-
-## 3. Indexing sequence
+## Index and incremental sequence
 
 ```mermaid
 sequenceDiagram
-    participant Client
-    participant API as FastAPI (main.py)
-    participant KB as KnowledgeBase (engine.py)
-    participant Idx as NotesIndexer
-    participant Emb as EmbeddingGenerator
-    participant VS as VectorStore
-    participant G as BacklinksGraph
-    participant S as NoteStore
+  participant C as Client
+  participant A as FastAPI
+  participant K as KnowledgeBase
+  participant I as Indexer
+  participant S as Vault store
+  participant E as Event bus
 
-    Client->>API: POST /notes/index {path}
-    API->>KB: index_vault(path)
-    KB->>Idx: parse_directory(path)
-    loop each .md file (recursive)
-        Idx->>Idx: strip frontmatter, extract links/tags
-        Idx->>Idx: chunk body (semantic)
-    end
-    Idx-->>KB: [note dicts with chunks]
-    KB->>Emb: embed_chunks(chunks)
-    KB->>S: replace_all(notes)
-    KB->>VS: add chunk vectors
-    KB->>G: build_graph(notes)
-    KB-->>API: {total_notes, total_chunks, total_links, total_tags}
-    API-->>Client: summary + graph {nodes, edges}
+  C->>A: POST /notes/index {vault_id, incremental}
+  A->>K: validate configured root
+  K->>E: index_started
+  K->>I: parse Markdown and content hashes
+  I-->>K: notes / chunks / links / tags
+  K->>S: replace or reconcile vault state
+  K->>K: rebuild vector index and graph
+  K->>E: index_completed (or index_failed)
+  K-->>A: legacy summary + graph
 ```
 
----
+The legacy full-index path remains the default. Incremental requests compare deterministic snapshots to report added, changed, and deleted note IDs. A deletion is reflected by replacing the vault-scoped corpus and rebuilding the in-memory graph/vector state from the surviving notes.
 
-## 4. Chat (RAG) sequence
+## Graph, watcher, and events
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as FastAPI
-    participant KB as KnowledgeBase
-    participant VS as VectorStore
-    participant LLM as LLM (sim | real)
-    participant J as CitationJudge
+Graph consumers continue to receive `{nodes, edges}`. Nodes/metadata now identify unresolved wikilink targets so dashboards can distinguish dangling links without losing compatibility.
 
-    Client->>API: POST /notes/chat {query}
-    API->>KB: chat(query)
-    KB->>VS: semantic_search(query)
-    VS-->>KB: top note chunks
-    KB->>LLM: grounded prompt with [n] context
-    alt offline / no key
-        LLM-->>KB: deterministic stitched answer with [n]
-    else real (keyed)
-        LLM-->>KB: model answer citing [n]
-    end
-    KB->>J: evaluate citation grounding
-    J-->>KB: passed + score
-    KB-->>API: {answer, citations, grounded, citation_score}
-    API-->>Client: cited answer
-```
+The polling watcher is an explicit local process. It detects Markdown changes, invokes the same incremental indexing service, and emits `watcher_started`, `note_changed`, `index_started`, `index_completed`, `index_failed`, and `watcher_stopped`. Optional watchdog availability is detected but never required.
 
----
+`EventBus` keeps a bounded, vault-scoped replay buffer with monotonically increasing event IDs. `GET /events` serializes the buffer as SSE, emits heartbeats when idle, and accepts either `last_event_id` or `Last-Event-ID`. `GET /events/replay` supports clients that must poll instead. Events are local runtime metadata, not a promise of durable distributed event delivery.
 
-## 5. Persistence model
+## Persistence and migrations
 
-Two layers serve different needs:
+The initial schema stores notes and chunks. The additive milestone migration introduces vault metadata, scoped note/chunk columns, file snapshots, saved searches, flashcards, flashcard review state, watcher state, and replay-event metadata. Composite vault predicates keep namespace queries explicit; the default namespace backfills as `default`.
 
-- **Relational store (`store.py` + `models.py`)** — `notes` and `note_chunks`
-  tables hold the canonical note content, links, tags, metadata, and chunk
-  embeddings (embeddings as JSON so the schema is SQLite-compatible for the
-  offline test fallback). Managed by Alembic (`alembic/`).
-- **Vector store (internal `vendor_core.vectorstore`)** — the search index. In-memory and
-  recomputable offline; pgvector (`note_vectors` table, `notes` namespace) when a
-  database is configured.
+PostgreSQL/pgvector can be selected by configuration. SQLite and in-memory fallback remain valid for the local demo and test path. Redis locks and Celery task dispatch are optional adapters; Celery task modules remain importable without a broker.
 
-The DB-availability probe (`db.py`) does a fast ~0.25s TCP pre-check followed by a
-`SELECT 1`. On success notes persist to PostgreSQL and survive restarts (the
-engine rebuilds the graph + vectors from the store on startup via
-`reindex_from_store`). On failure everything falls back to in-memory.
+## Vendor compatibility closure
 
----
+`apps/api/src/internal/vendor_core/` is the private namespace for the pinned `operator-shared-core` v1.3.0 import closure. It supplies configuration, database, document parsing, embeddings, errors, evaluation/judging, health, LLM helpers, logging, Redis helpers, tasks, testing, vector store, and transitive pricing. Runtime modules import this namespace, not an external `shared_core` package. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for provenance and patches.
 
-## 6. Module inventory
+## Optional-provider boundary
 
-| Module | Responsibility |
-|--------|----------------|
-| `main.py` | FastAPI app, endpoints, lifespan DB probe, middleware |
-| `engine.py` | `KnowledgeBase` orchestration (index / search / chat / graph) |
-| `indexer.py` | Parse, chunk, extract wikilinks / tags / frontmatter |
-| `embeddings.py` | Sync facade over internal `vendor_core.embeddings` (offline/real) |
-| `search.py` | Keyword scorer + semantic vector retrieval |
-| `chat.py` | RAG answer (sim/real LLM) + `CitationJudge` grounding |
-| `graph.py` | Backlinks adjacency + `{nodes, edges}` export |
-| `store.py` | `InMemoryNoteStore` + `DatabaseNoteStore` |
-| `db.py` | DB-availability probe + store selection |
-| `models.py` | SQLAlchemy `Note` / `NoteChunk` |
-| `worker.py` | Celery tasks (`kb.index_vault`, `kb.reindex`) |
-| `config.py` | `AppConfig` (extends internal `vendor_core` `BaseAppConfig`) |
+OpenAI/Anthropic generation, real embeddings, PostgreSQL/pgvector, Redis, Celery, watchdog, OCR, and heavy document/model packages are optional extras. A missing optional SDK or failed provider call is handled by deterministic/local behavior where the API contract permits it. No route requires network credentials in the default configuration.

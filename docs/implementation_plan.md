@@ -1,83 +1,18 @@
-# Implementation Plan - Personal Knowledge Base OS
+# Implementation plan — Personal Knowledge Base OS
 
-This document details the step-by-step technical implementation plan and development milestones for **Personal Knowledge Base OS**.
+> Historical planning artifact. The work below is retained for provenance and reconciled against the implemented architecture; it is not a future dependency plan.
 
----
+## Delivered architecture
 
-## 1. Project Goal
-A local-first note vault indexing engine that compiles backlinks graphs, performs semantic search, and provides query interfaces for personal knowledge maps.
+The service is a standalone local-first Python API with a TypeScript dashboard. Its private `apps.api.src.internal.vendor_core` namespace vendors the exact required `operator-shared-core` v1.3.0 closure. The package installs with `python -m pip install -e ".[dev]"`; no sibling path, `shared_core` import, or Git-installed dependency is operational.
 
----
+## Delivered milestones
 
-## 2. Architecture & Component Map
+1. Markdown ingestion, wikilinks, backlinks, keyword retrieval, graph export, and demo vault.
+2. Deterministic/offline semantic and hybrid retrieval, cited chat, optional provider adapters, persistence fallback, migrations, and broker-free task imports.
+3. Dashboard graph/edit actions, dangling-link metadata, safe vault-root editing, event emission, and SSE/polling client behavior.
+4. Multi-vault namespaces, snapshots and incremental indexing, explicit polling watchers with optional watchdog, tag filters/saved searches, deterministic flashcards, and local review scheduling.
 
-The repository is structured as a standalone project conforming to operator workspace standards. The core module responsibilities are mapped below:
+## Constraints preserved
 
-### 2.1 File Map & Responsibilities
-* **`apps/api/src/indexer.py`**: Scans directory vaults, extracts wikilinks, and indexes metadata tags.
-* **`apps/api/src/graph.py`**: Constructs note adjacency maps and resolves backlinks list dynamically.
-* **`apps/api/src/search.py`**: Exposes semantic vector queries using pgvector against note contents.
-* **`apps/api/src/main.py`**: FastAPI server exposing endpoints to Next.js notes interfaces.
-
-### 2.2 Shared Core Dependencies
-This service owns a pinned compatibility closure under `apps/api/src/internal/vendor_core/`:
-* `vendor_core.config.BaseAppConfig`: Settings parsing, reading configs from `.env`.
-* `vendor_core.database.DatabaseManager`: SQL database engine instantiation and session factories.
-* `vendor_core.redis.RedisManager`: Optional caching connections and health checks.
-* `vendor_core.logging.setup_logging`: Structured log formats and correlation ID tracing.
-* `vendor_core.errors.BaseApplicationError`: Exception mapping and global handlers.
-
----
-
-## 3. Database Schema & Data Models
-
-### 3.1 Data Schema
-PostgreSQL (pgvector): `notes` (id, title, content, path_hash, updated_at, embedding_vector: vector(1536)), `links` (id, source_note_id, target_note_id).
-Redis: Cache index mappings and active directory watch mappings.
-
-### 3.2 Redis Storage & Caching Patterns
-* Caching: Utilizing `@cache` decorator with prefix keys.
-* Concurrency: Lock critical tasks using `RedisLock` context managers.
-
----
-
-## 4. Step-by-Step Implementation Sequence
-
-The project development checklist is ordered into six milestones:
-
-- `[ ]` **Milestone 1 (Design): Design directory file indexer, wikilink regex extraction, and backlink calculations.**
-- `[ ]` **Milestone 2 (Skeleton): Scaffold apps/api folder structures, setup FastAPI routes, and create pgvector connection.**
-- `[ ]` **Milestone 3 (Core Loop): Build notes directory file indexer and backlinks compiler.**
-- `[ ]` **Milestone 4 (Reliability): Handle deleted files, broken wikilink pathways, and filesystem permission locks.**
-- `[ ]` **Milestone 5 (Showcase): Ingest a sample markdown notes vault, generate graph models, and chat with notes.**
-- `[ ]` **Milestone 6 (Publish): Document wiki syntax compatibility, graph scaling bounds, and Next.js visual configurations.**
-
----
-
-## 5. Standard Makefile & Developer Commands
-
-```bash
-make install          # Set up virtual environment and local editable package
-make dev              # Boot the microservice API server locally
-make test             # Run local pytest / jest test suites
-make lint             # Execute Ruff checks / ESLint verifications
-make format           # Standardize style formatting
-make typecheck        # Verify static types (Pyright / TypeScript)
-make docker-up        # Spawn isolated local PostgreSQL and Redis service containers
-make docker-down      # Teardown the isolated local containers stack
-make demo             # Execute the runnable demo workflow
-make clean            # Remove caches and temporary files
-```
-
----
-
-## 6. Verification & Testing Plan
-
-### 6.1 Automated Tests
-* **Core Logic Verification**: Tests for regex link matching, backlinks reversal mapping, directory index caching, and missing file exception handlers.
-* **Type Safety & Style**: Run `make typecheck` and `make lint` as a pipeline validation hook.
-* **Mock Environments**: Utilize `MockDatabase` and `MockRedisClient` inside `tests/conftest.py` to assert correct lifecycle transactions without depending on live network services.
-
-### 6.2 Manual Verification
-* Deploy local PostgreSQL and Redis containers with `make docker-up`.
-* Execute the runnable script demo `make demo` and review Loguru stdout records.
+Legacy API routes and response keys remain compatible; `vault_id="default"`, full indexing, synchronous execution, and deterministic offline providers remain defaults. PostgreSQL/pgvector, Redis, Celery, OpenAI/Anthropic, watchdog, OCR, and heavy parsers/models are optional. Authentication, hosted collaboration, cloud storage, and mandatory infrastructure are intentionally deferred.

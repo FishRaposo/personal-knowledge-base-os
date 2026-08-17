@@ -25,15 +25,19 @@
 - Comprehensive tests (unit, integration, API, worker, golden/regression) and a
   richer demo vault.
 
-## Milestone 3 — Graph UI & live editing (planned)
-- `apps/web/` (Next.js) force-directed graph visualization over `/graph`.
-- Node-side markdown editor that reads `/notes/{id}` and writes back to disk.
-- Dangling-link highlighting using a graph response that flags unresolved targets.
-- Live events / WebSocket stream so the dashboard updates as the vault changes.
+## Milestone 3 — Graph UI & live editing (delivered)
+- Next.js dashboard graph, note view/edit actions, and demo fixtures.
+- Additive dangling-link metadata while retaining the legacy `{nodes, edges}` graph shape.
+- Safe configured-root editing with symlink/path-escape refusal and deterministic events.
+- Replayable SSE (`/events`) and a polling fallback; watcher/index/editor event vocabulary is stable.
 
-## Milestone 4 — Sync, watching, and study tools (future)
-- Filesystem watcher (`watchdog`) to re-index on note add/edit/delete.
-- Incremental indexing (content-hash diffing) instead of full re-index.
-- Multi-vault workspaces with per-vault namespaces in the vector store.
-- LLM-generated spaced-repetition flashcards from notes.
-- Saved searches and tag-scoped semantic queries.
+## Milestone 4 — Sync, watching, and study tools (delivered locally)
+- Explicit stdlib polling watcher with optional watchdog acceleration; no watcher starts at API boot.
+- Content-hash incremental indexing for added, changed, and deleted Markdown notes; full indexing remains the compatibility default.
+- Multi-vault namespaces with `vault_id="default"` legacy compatibility and scoped retrieval, graph, tags, chat, saved searches, cards, and events.
+- Deterministic source-cited flashcards and local review scheduling; provider enrichment is optional and falls back locally.
+- Saved searches and tag-scoped keyword/semantic/hybrid retrieval.
+
+## Deliberately deferred
+
+Authentication, hosted/team collaboration, cloud storage, mandatory PostgreSQL/Redis/Celery, hosted scheduling, provider-required workflows, and heavy parser/model installations are out of scope. PostgreSQL/pgvector, Redis, Celery, OpenAI/Anthropic, watchdog, OCR, and document/model integrations remain opt-in extras.
